@@ -27,6 +27,7 @@ import {
   Store,
   Image,
   Tag,
+  Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -44,6 +45,7 @@ const mainMenuItems = [
 
 const settingsMenuItems = [
   { title: "Site", url: "/admin/settings/site", icon: Palette },
+  { title: "Page d'accueil", url: "/admin/settings/homepage", icon: Home },
   { title: "Livraison", url: "/admin/settings/shipping", icon: Truck },
   { title: "Paiements", url: "/admin/settings/payments", icon: CreditCard },
   { title: "SMS", url: "/admin/settings/sms", icon: MessageSquare },

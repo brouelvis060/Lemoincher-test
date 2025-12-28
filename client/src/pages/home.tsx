@@ -1,13 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowRight, Truck, Shield, CreditCard, Headphones } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ArrowRight, Truck, Shield, CreditCard, Headphones, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientHeader } from "@/components/client/header";
 import { ClientFooter } from "@/components/client/footer";
 import { ProductCard } from "@/components/client/product-card";
-import type { ProductWithCategory, Category } from "@shared/schema";
+import { useSiteSettings } from "@/lib/site-settings";
+import type { ProductWithCategory, Category, SiteSettings } from "@shared/schema";
+
+interface Banner {
+  image: string;
+  link?: string;
+  title?: string;
+}
 
 const features = [
   {
@@ -32,7 +40,112 @@ const features = [
   },
 ];
 
+function BannerCarousel({ banners }: { banners: Banner[] }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const goToNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % banners.length);
+  }, [banners.length]);
+
+  const goToPrev = useCallback(() => {
+    setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  }, [banners.length]);
+
+  useEffect(() => {
+    if (banners.length <= 1 || isPaused) return;
+    
+    const interval = setInterval(goToNext, 5000);
+    return () => clearInterval(interval);
+  }, [banners.length, isPaused, goToNext]);
+
+  if (banners.length === 0) {
+    return null;
+  }
+
+  const currentBanner = banners[currentIndex];
+  const BannerWrapper = currentBanner.link ? Link : "div";
+  const wrapperProps = currentBanner.link ? { href: currentBanner.link } : {};
+
+  return (
+    <section 
+      className="relative w-full overflow-hidden bg-muted"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      data-testid="banner-carousel"
+    >
+      <div className="relative aspect-[16/5] md:aspect-[16/4] lg:aspect-[16/3.5]">
+        {banners.map((banner, index) => (
+          <div
+            key={index}
+            className={`absolute inset-0 transition-opacity duration-500 ${
+              index === currentIndex ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+          >
+            {banner.link ? (
+              <Link href={banner.link} className="block w-full h-full">
+                <img
+                  src={banner.image}
+                  alt={banner.title || `Bannière ${index + 1}`}
+                  className="w-full h-full object-cover"
+                  data-testid={`img-banner-${index}`}
+                />
+              </Link>
+            ) : (
+              <img
+                src={banner.image}
+                alt={banner.title || `Bannière ${index + 1}`}
+                className="w-full h-full object-cover"
+                data-testid={`img-banner-${index}`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {banners.length > 1 && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 shadow-md"
+            onClick={goToPrev}
+            data-testid="button-banner-prev"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 shadow-md"
+            onClick={goToNext}
+            data-testid="button-banner-next"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </Button>
+
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+            {banners.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentIndex(index)}
+                className={`w-3 h-3 rounded-full transition-colors ${
+                  index === currentIndex 
+                    ? "bg-primary" 
+                    : "bg-background/60 hover:bg-background/80"
+                }`}
+                data-testid={`button-banner-dot-${index}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function HomePage() {
+  const { settings } = useSiteSettings();
   const { data: products, isLoading: productsLoading } = useQuery<ProductWithCategory[]>({
     queryKey: ["/api/products", "active"],
   });
@@ -43,39 +156,44 @@ export default function HomePage() {
 
   const featuredProducts = products?.slice(0, 8) || [];
   const activeCategories = categories?.filter(c => c.isActive) || [];
+  const banners = (settings?.homeBanners as Banner[]) || [];
 
   return (
     <div className="min-h-screen flex flex-col">
       <ClientHeader />
       
       <main className="flex-1">
-        <section className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-background to-accent/10">
-          <div className="container px-4 py-16 md:py-24">
-            <div className="mx-auto max-w-3xl text-center">
-              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl" data-testid="text-hero-title">
-                Votre boutique en ligne{" "}
-                <span className="text-primary">africaine</span>
-              </h1>
-              <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-                Découvrez une large sélection de produits de qualité avec livraison rapide 
-                et paiement Mobile Money sécurisé.
-              </p>
-              <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-                <Link href="/products">
-                  <Button size="lg" data-testid="button-shop-now">
-                    Voir les produits
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/about">
-                  <Button variant="outline" size="lg">
-                    En savoir plus
-                  </Button>
-                </Link>
+        {banners.length > 0 ? (
+          <BannerCarousel banners={banners} />
+        ) : (
+          <section className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-background to-accent/10">
+            <div className="container px-4 py-16 md:py-24">
+              <div className="mx-auto max-w-3xl text-center">
+                <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl" data-testid="text-hero-title">
+                  Votre boutique en ligne{" "}
+                  <span className="text-primary">africaine</span>
+                </h1>
+                <p className="mt-6 text-lg text-muted-foreground md:text-xl">
+                  Découvrez une large sélection de produits de qualité avec livraison rapide 
+                  et paiement Mobile Money sécurisé.
+                </p>
+                <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+                  <Link href="/products">
+                    <Button size="lg" data-testid="button-shop-now">
+                      Voir les produits
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <Link href="/about">
+                    <Button variant="outline" size="lg">
+                      En savoir plus
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="border-y bg-card">
           <div className="container px-4 py-12">

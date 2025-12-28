@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, decimal, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, decimal, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -150,6 +150,7 @@ export const siteSettings = pgTable("site_settings", {
   phone: text("phone"),
   email: text("email"),
   address: text("address"),
+  homeBanners: jsonb("home_banners").$type<Array<{ image: string; link?: string; title?: string }>>().default([]),
 });
 
 export const paymentSettings = pgTable("payment_settings", {
