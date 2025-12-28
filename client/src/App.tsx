@@ -32,6 +32,7 @@ import AdminShippingSettings from "@/pages/admin/settings/shipping";
 import AdminPaymentSettings from "@/pages/admin/settings/payments";
 import AdminSmsSettings from "@/pages/admin/settings/sms";
 import AdminMedia from "@/pages/admin/media";
+import AdminAttributes from "@/pages/admin/attributes";
 
 function Router() {
   return (
@@ -61,6 +62,9 @@ function Router() {
       </Route>
       <Route path="/admin/categories">
         <AdminLayout><AdminCategories /></AdminLayout>
+      </Route>
+      <Route path="/admin/attributes">
+        <AdminLayout><AdminAttributes /></AdminLayout>
       </Route>
       <Route path="/admin/orders">
         <AdminLayout><AdminOrders /></AdminLayout>

@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { ProductWithCategory, Category, ProductVariation, ProductAttribute } from "@shared/schema";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { ProductWithCategory, Category, ProductVariation, ProductAttribute, AttributeWithValues } from "@shared/schema";
 
 const attributeSchema = z.object({
   id: z.string().optional(),
@@ -60,9 +61,7 @@ export default function AdminProductForm() {
   const isEditing = params?.id && params.id !== "new";
   const productId = isEditing ? params.id : null;
   const [uploaderKey, setUploaderKey] = useState(0);
-  const [newAttributeName, setNewAttributeName] = useState("");
-  const [newAttributeValue, setNewAttributeValue] = useState("");
-  const [editingAttributeIndex, setEditingAttributeIndex] = useState<number | null>(null);
+  const [selectedGlobalAttribute, setSelectedGlobalAttribute] = useState<string>("");
 
   const { data: product, isLoading: productLoading } = useQuery<ProductWithCategory>({
     queryKey: ["/api/products", productId],
@@ -81,6 +80,10 @@ export default function AdminProductForm() {
   const { data: productVariations } = useQuery<ProductVariation[]>({
     queryKey: ["/api/products", productId, "variations"],
     enabled: !!productId,
+  });
+
+  const { data: globalAttributes } = useQuery<AttributeWithValues[]>({
+    queryKey: ["/api/global-attributes"],
   });
 
   const form = useForm<ProductForm>({
@@ -175,40 +178,48 @@ export default function AdminProductForm() {
     };
   };
 
-  const addAttribute = () => {
-    if (!newAttributeName.trim()) {
-      toast({ title: "Erreur", description: "Nom de l'attribut requis", variant: "destructive" });
+  const addGlobalAttribute = () => {
+    if (!selectedGlobalAttribute) {
+      toast({ title: "Erreur", description: "Sélectionnez un attribut", variant: "destructive" });
       return;
     }
+    
+    const attr = globalAttributes?.find(a => a.id === selectedGlobalAttribute);
+    if (!attr) return;
+    
+    const currentAttributes = form.getValues("attributes") || [];
+    if (currentAttributes.some(a => a.name === attr.name)) {
+      toast({ title: "Erreur", description: "Cet attribut est déjà ajouté", variant: "destructive" });
+      return;
+    }
+    
     appendAttribute({
-      name: newAttributeName.trim(),
+      name: attr.name,
       values: [],
     });
-    setNewAttributeName("");
+    setSelectedGlobalAttribute("");
   };
 
-  const addValueToAttribute = (index: number) => {
-    if (!newAttributeValue.trim()) return;
-    const currentAttribute = attributeFields[index];
-    const currentValues = form.getValues(`attributes.${index}.values`) || [];
-    if (currentValues.includes(newAttributeValue.trim())) {
-      toast({ title: "Erreur", description: "Cette valeur existe déjà", variant: "destructive" });
-      return;
-    }
-    updateAttribute(index, {
-      ...currentAttribute,
-      values: [...currentValues, newAttributeValue.trim()],
-    });
-    setNewAttributeValue("");
-  };
-
-  const removeValueFromAttribute = (attrIndex: number, valueIndex: number) => {
+  const toggleValueForAttribute = (attrIndex: number, value: string) => {
     const currentAttribute = attributeFields[attrIndex];
     const currentValues = form.getValues(`attributes.${attrIndex}.values`) || [];
-    updateAttribute(attrIndex, {
-      ...currentAttribute,
-      values: currentValues.filter((_, i) => i !== valueIndex),
-    });
+    
+    if (currentValues.includes(value)) {
+      updateAttribute(attrIndex, {
+        ...currentAttribute,
+        values: currentValues.filter(v => v !== value),
+      });
+    } else {
+      updateAttribute(attrIndex, {
+        ...currentAttribute,
+        values: [...currentValues, value],
+      });
+    }
+  };
+
+  const getGlobalAttributeValues = (attrName: string): string[] => {
+    const globalAttr = globalAttributes?.find(a => a.name === attrName);
+    return globalAttr?.values.map(v => v.value) || [];
   };
 
   const generateVariations = () => {
@@ -574,111 +585,107 @@ export default function AdminProductForm() {
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Nom de l'attribut (ex: Couleur, Taille)"
-                          value={newAttributeName}
-                          onChange={(e) => setNewAttributeName(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAttribute())}
-                          data-testid="input-new-attribute-name"
-                        />
-                        <Button 
-                          type="button" 
-                          onClick={addAttribute}
-                          data-testid="button-add-attribute"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Ajouter
-                        </Button>
-                      </div>
+                      {globalAttributes && globalAttributes.length > 0 ? (
+                        <div className="flex gap-2">
+                          <Select
+                            value={selectedGlobalAttribute}
+                            onValueChange={setSelectedGlobalAttribute}
+                          >
+                            <SelectTrigger data-testid="select-global-attribute">
+                              <SelectValue placeholder="Choisir un attribut..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {globalAttributes
+                                .filter(attr => attr.isActive && !attributeFields.some(f => f.name === attr.name))
+                                .map((attr) => (
+                                  <SelectItem key={attr.id} value={attr.id}>
+                                    {attr.name} ({attr.values.length} valeurs)
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <Button 
+                            type="button" 
+                            onClick={addGlobalAttribute}
+                            disabled={!selectedGlobalAttribute}
+                            data-testid="button-add-attribute"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Ajouter
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground border-2 border-dashed rounded-lg">
+                          <p className="mb-2">Aucun attribut global disponible.</p>
+                          <Link href="/admin/attributes">
+                            <Button type="button" variant="outline" size="sm">
+                              Créer des attributs
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
 
                       {attributeFields.length === 0 ? (
                         <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
-                          Aucun attribut. Ajoutez des attributs comme "Couleur" ou "Taille".
+                          Sélectionnez des attributs pour créer des variations.
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {attributeFields.map((field, attrIndex) => (
-                            <div key={field.id} className="border rounded-lg p-4 space-y-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-medium">{field.name}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeAttribute(attrIndex)}
-                                  data-testid={`button-remove-attribute-${attrIndex}`}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                              
-                              <div className="flex flex-wrap gap-2">
-                                {(form.getValues(`attributes.${attrIndex}.values`) || []).map((value, valueIndex) => (
-                                  <Badge key={valueIndex} variant="secondary" className="gap-1">
-                                    {value}
-                                    <button
-                                      type="button"
-                                      onClick={() => removeValueFromAttribute(attrIndex, valueIndex)}
-                                      className="ml-1 hover:text-destructive"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </Badge>
-                                ))}
-                              </div>
-
-                              {editingAttributeIndex === attrIndex ? (
-                                <div className="flex gap-2">
-                                  <Input
-                                    placeholder={`Nouvelle valeur pour ${field.name}`}
-                                    value={newAttributeValue}
-                                    onChange={(e) => setNewAttributeValue(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        addValueToAttribute(attrIndex);
-                                      } else if (e.key === "Escape") {
-                                        setEditingAttributeIndex(null);
-                                        setNewAttributeValue("");
-                                      }
-                                    }}
-                                    autoFocus
-                                    data-testid={`input-attribute-value-${attrIndex}`}
-                                  />
+                          {attributeFields.map((field, attrIndex) => {
+                            const availableValues = getGlobalAttributeValues(field.name);
+                            const selectedValues = form.getValues(`attributes.${attrIndex}.values`) || [];
+                            
+                            return (
+                              <div key={field.id} className="border rounded-lg p-4 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium">{field.name}</span>
                                   <Button
                                     type="button"
-                                    size="sm"
-                                    onClick={() => addValueToAttribute(attrIndex)}
-                                  >
-                                    Ajouter
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
                                     variant="ghost"
-                                    onClick={() => {
-                                      setEditingAttributeIndex(null);
-                                      setNewAttributeValue("");
-                                    }}
+                                    size="icon"
+                                    onClick={() => removeAttribute(attrIndex)}
+                                    data-testid={`button-remove-attribute-${attrIndex}`}
                                   >
-                                    Annuler
+                                    <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>
                                 </div>
-                              ) : (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setEditingAttributeIndex(attrIndex)}
-                                  data-testid={`button-add-value-${attrIndex}`}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Ajouter une valeur
-                                </Button>
-                              )}
-                            </div>
-                          ))}
+                                
+                                <p className="text-sm text-muted-foreground">
+                                  Sélectionnez les valeurs à utiliser pour ce produit :
+                                </p>
+                                
+                                <div className="flex flex-wrap gap-3">
+                                  {availableValues.map((value) => (
+                                    <div key={value} className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`attr-${attrIndex}-${value}`}
+                                        checked={selectedValues.includes(value)}
+                                        onCheckedChange={() => toggleValueForAttribute(attrIndex, value)}
+                                        data-testid={`checkbox-value-${attrIndex}-${value}`}
+                                      />
+                                      <label
+                                        htmlFor={`attr-${attrIndex}-${value}`}
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                      >
+                                        {value}
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                                
+                                {selectedValues.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 pt-2 border-t">
+                                    <span className="text-sm text-muted-foreground">Sélectionné :</span>
+                                    {selectedValues.map((value, i) => (
+                                      <Badge key={i} variant="secondary">
+                                        {value}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 

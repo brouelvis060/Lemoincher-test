@@ -26,6 +26,7 @@ import {
   LogOut,
   Store,
   Image,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +36,7 @@ const mainMenuItems = [
   { title: "Tableau de bord", url: "/admin", icon: LayoutDashboard },
   { title: "Produits", url: "/admin/products", icon: Package },
   { title: "Catégories", url: "/admin/categories", icon: FolderTree },
+  { title: "Attributs", url: "/admin/attributes", icon: Tag },
   { title: "Commandes", url: "/admin/orders", icon: ShoppingCart },
   { title: "Clients", url: "/admin/users", icon: Users },
   { title: "Médiathèque", url: "/admin/media", icon: Image },
