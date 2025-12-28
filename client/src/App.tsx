@@ -26,6 +26,7 @@ import AdminProducts from "@/pages/admin/products";
 import AdminProductForm from "@/pages/admin/product-form";
 import AdminCategories from "@/pages/admin/categories";
 import AdminOrders from "@/pages/admin/orders";
+import AdminOrderForm from "@/pages/admin/order-form";
 import AdminUsers from "@/pages/admin/users";
 import AdminSiteSettings from "@/pages/admin/settings/site";
 import AdminShippingSettings from "@/pages/admin/settings/shipping";
@@ -68,6 +69,9 @@ function Router() {
       </Route>
       <Route path="/admin/orders">
         <AdminLayout><AdminOrders /></AdminLayout>
+      </Route>
+      <Route path="/admin/orders/new">
+        <AdminLayout><AdminOrderForm /></AdminLayout>
       </Route>
       <Route path="/admin/orders/:id">
         <AdminLayout><AdminOrders /></AdminLayout>

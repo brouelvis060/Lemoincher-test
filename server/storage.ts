@@ -15,7 +15,7 @@ import {
   type ProductWithCategory, type OrderWithDetails, type CartItemWithProduct
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -54,6 +54,8 @@ export interface IStorage {
   getOrderByNumber(orderNumber: string): Promise<OrderWithDetails | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined>;
+  deleteOrder(id: string): Promise<boolean>;
+  deleteOrders(ids: string[]): Promise<boolean>;
 
   // Order Items
   createOrderItem(item: InsertOrderItem): Promise<OrderItem>;
@@ -343,6 +345,21 @@ export class DatabaseStorage implements IStorage {
     const updateData = { ...data, updatedAt: new Date() };
     const [result] = await db.update(orders).set(updateData).where(eq(orders.id, id)).returning();
     return result || undefined;
+  }
+
+  async deleteOrder(id: string): Promise<boolean> {
+    await db.delete(payments).where(eq(payments.orderId, id));
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+    const [result] = await db.delete(orders).where(eq(orders.id, id)).returning();
+    return !!result;
+  }
+
+  async deleteOrders(ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    await db.delete(payments).where(inArray(payments.orderId, ids));
+    await db.delete(orderItems).where(inArray(orderItems.orderId, ids));
+    await db.delete(orders).where(inArray(orders.id, ids));
+    return true;
   }
 
   // Order Items

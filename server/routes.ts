@@ -566,6 +566,31 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/orders/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteOrder(req.params.id);
+      if (!success) return res.status(404).json({ message: "Commande non trouvée" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete order error:", error);
+      res.status(500).json({ message: "Erreur lors de la suppression" });
+    }
+  });
+
+  app.post("/api/orders/bulk-delete", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Liste d'IDs requise" });
+      }
+      await storage.deleteOrders(ids);
+      res.json({ success: true, deletedCount: ids.length });
+    } catch (error) {
+      console.error("Bulk delete orders error:", error);
+      res.status(500).json({ message: "Erreur lors de la suppression" });
+    }
+  });
+
   // Cart routes
   app.get("/api/cart", async (req, res) => {
     try {
