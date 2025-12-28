@@ -144,7 +144,7 @@ export default function AdminMedia() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {mediaFiles.map((file) => (
             <Card key={file.id} className="overflow-hidden" data-testid={`card-media-${file.id}`}>
               <div className="aspect-video bg-muted flex items-center justify-center overflow-hidden">
@@ -161,29 +161,28 @@ export default function AdminMedia() {
                   </div>
                 )}
               </div>
-              <CardContent className="p-3 space-y-2">
-                <p className="font-medium truncate text-sm" title={file.originalName}>
+              <CardContent className="p-2 sm:p-3 space-y-1.5 sm:space-y-2">
+                <p className="font-medium truncate text-xs sm:text-sm" title={file.originalName}>
                   {file.originalName}
                 </p>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                   <Badge variant="secondary">
                     {formatFileSize(file.size)}
                   </Badge>
-                  {file.createdAt && (
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(file.createdAt), "d MMM yyyy", { locale: fr })}
-                    </span>
-                  )}
+                  <span className="text-xs text-muted-foreground hidden sm:inline">
+                    {file.createdAt && format(new Date(file.createdAt), "d MMM", { locale: fr })}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2">
                   <Button
-                    size="sm"
+                    size="icon"
                     variant="outline"
                     onClick={() => copyToClipboard(file.url)}
                     data-testid={`button-copy-url-${file.id}`}
+                    className="h-7 w-7 sm:h-8 sm:w-auto sm:px-3"
                   >
-                    <Copy className="w-3 h-3 mr-1" />
-                    Copier URL
+                    <Copy className="w-3 h-3 sm:mr-1" />
+                    <span className="hidden sm:inline">Copier</span>
                   </Button>
                   <Button
                     size="icon"
@@ -191,8 +190,9 @@ export default function AdminMedia() {
                     onClick={() => deleteMutation.mutate(file.id)}
                     disabled={deleteMutation.isPending}
                     data-testid={`button-delete-${file.id}`}
+                    className="h-7 w-7 sm:h-8 sm:w-8"
                   >
-                    <Trash2 className="w-4 h-4 text-destructive" />
+                    <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-destructive" />
                   </Button>
                 </div>
               </CardContent>
