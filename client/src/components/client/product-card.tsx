@@ -1,5 +1,5 @@
-import { ShoppingCart, Eye } from "lucide-react";
-import { Link } from "wouter";
+import { ShoppingCart, Eye, Settings2 } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +16,18 @@ export function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  const isVariable = product.productType === "variable";
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    if (isVariable) {
+      navigate(`/product/${product.id}`);
+      return;
+    }
     
     if (!user) {
       toast({
@@ -39,7 +47,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const price = parseFloat(product.price);
   const stock = product.stock || 0;
-  const isOutOfStock = stock === 0;
+  const isOutOfStock = stock === 0 && !isVariable;
   const mainImage = product.images?.[0] || "https://placehold.co/400x400/f3f4f6/9ca3af?text=Produit";
 
   return (
@@ -95,10 +103,20 @@ export function ProductCard({ product }: ProductCardProps) {
           size="sm"
           onClick={handleAddToCart}
           disabled={isOutOfStock}
+          variant={isVariable ? "outline" : "default"}
           data-testid={`button-add-cart-${product.id}`}
         >
-          <ShoppingCart className="h-4 w-4 mr-1" />
-          Ajouter
+          {isVariable ? (
+            <>
+              <Settings2 className="h-4 w-4 mr-1" />
+              Options
+            </>
+          ) : (
+            <>
+              <ShoppingCart className="h-4 w-4 mr-1" />
+              Ajouter
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>
