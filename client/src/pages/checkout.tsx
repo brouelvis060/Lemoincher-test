@@ -84,6 +84,31 @@ export default function CheckoutPage() {
     }
   }, [addresses, selectedAddress]);
 
+  // Check for pending payment order when cart is empty (user returning from payment gateway)
+  const { data: userOrders } = useQuery<any[]>({
+    queryKey: ["/api/orders", { userId: user?.id, checkPending: true }],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders?userId=${user?.id}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user && items.length === 0,
+  });
+
+  // Redirect to orders if user has a pending payment order and cart is empty
+  useEffect(() => {
+    if (items.length === 0 && userOrders && userOrders.length > 0) {
+      const pendingPaymentOrder = userOrders.find((o: any) => o.status === "pending_payment");
+      if (pendingPaymentOrder) {
+        toast({
+          title: "Commande en attente",
+          description: "Vous avez une commande en attente de paiement",
+        });
+        navigate(`/orders/${pendingPaymentOrder.id}`);
+      }
+    }
+  }, [items.length, userOrders, navigate, toast]);
+
   const addressForm = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
@@ -232,31 +257,6 @@ export default function CheckoutPage() {
       </div>
     );
   }
-
-  // Check for pending payment order when cart is empty (user returning from payment gateway)
-  const { data: userOrders } = useQuery<any[]>({
-    queryKey: ["/api/orders", { userId: user?.id }],
-    queryFn: async () => {
-      const res = await fetch(`/api/orders?userId=${user?.id}`, { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!user && items.length === 0,
-  });
-
-  // Redirect to orders if user has a pending payment order and cart is empty
-  useEffect(() => {
-    if (items.length === 0 && userOrders && userOrders.length > 0) {
-      const pendingPaymentOrder = userOrders.find((o: any) => o.status === "pending_payment");
-      if (pendingPaymentOrder) {
-        toast({
-          title: "Commande en attente",
-          description: "Vous avez une commande en attente de paiement",
-        });
-        navigate(`/orders/${pendingPaymentOrder.id}`);
-      }
-    }
-  }, [items.length, userOrders, navigate, toast]);
 
   if (items.length === 0) {
     return (
