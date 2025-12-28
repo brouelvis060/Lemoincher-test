@@ -48,14 +48,20 @@ export interface IStorage {
   deleteAddress(id: string): Promise<boolean>;
 
   // Orders
-  getOrders(): Promise<OrderWithDetails[]>;
+  getOrders(includeDeleted?: boolean): Promise<OrderWithDetails[]>;
+  getOrdersPaginated(page: number, limit: number, includeDeleted?: boolean): Promise<{ orders: OrderWithDetails[]; total: number }>;
+  getTrashedOrders(): Promise<OrderWithDetails[]>;
   getOrdersByUser(userId: string): Promise<OrderWithDetails[]>;
   getOrder(id: string): Promise<OrderWithDetails | undefined>;
   getOrderByNumber(orderNumber: string): Promise<OrderWithDetails | undefined>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined>;
-  deleteOrder(id: string): Promise<boolean>;
-  deleteOrders(ids: string[]): Promise<boolean>;
+  softDeleteOrder(id: string): Promise<boolean>;
+  softDeleteOrders(ids: string[]): Promise<boolean>;
+  restoreOrder(id: string): Promise<boolean>;
+  restoreOrders(ids: string[]): Promise<boolean>;
+  permanentlyDeleteOrder(id: string): Promise<boolean>;
+  permanentlyDeleteOrders(ids: string[]): Promise<boolean>;
 
   // Order Items
   createOrderItem(item: InsertOrderItem): Promise<OrderItem>;
@@ -269,48 +275,63 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Orders
-  async getOrders(): Promise<OrderWithDetails[]> {
-    const orderList = await db.select().from(orders).orderBy(desc(orders.createdAt));
-    const result: OrderWithDetails[] = [];
+  private async enrichOrderWithDetails(order: any): Promise<OrderWithDetails> {
+    const items = await this.getOrderItems(order.id);
+    const address = order.addressId ? await this.getAddress(order.addressId) : undefined;
+    const user = await this.getUser(order.userId);
+    const payment = await this.getPaymentByOrder(order.id);
     
-    for (const order of orderList) {
-      const items = await this.getOrderItems(order.id);
-      const address = order.addressId ? await this.getAddress(order.addressId) : undefined;
-      const user = await this.getUser(order.userId);
-      const payment = await this.getPaymentByOrder(order.id);
-      
-      const itemsWithProducts = await Promise.all(items.map(async (item) => {
-        const product = await this.getProduct(item.productId);
-        return { ...item, product };
-      }));
-      
-      result.push({ ...order, items: itemsWithProducts, address, user, payment });
-    }
+    const itemsWithProducts = await Promise.all(items.map(async (item) => {
+      const product = await this.getProduct(item.productId);
+      return { ...item, product };
+    }));
     
-    return result;
+    return { ...order, items: itemsWithProducts, address, user, payment };
+  }
+
+  async getOrders(includeDeleted: boolean = false): Promise<OrderWithDetails[]> {
+    const whereClause = includeDeleted ? undefined : sql`${orders.deletedAt} IS NULL`;
+    const orderList = await db.select().from(orders)
+      .where(whereClause)
+      .orderBy(desc(orders.createdAt));
+    
+    return Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
+  }
+
+  async getOrdersPaginated(page: number, limit: number, includeDeleted: boolean = false): Promise<{ orders: OrderWithDetails[]; total: number }> {
+    const offset = (page - 1) * limit;
+    const whereClause = includeDeleted ? undefined : sql`${orders.deletedAt} IS NULL`;
+    
+    const [countResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(whereClause);
+    const total = Number(countResult?.count || 0);
+    
+    const orderList = await db.select().from(orders)
+      .where(whereClause)
+      .orderBy(desc(orders.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
+    const ordersWithDetails = await Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
+    
+    return { orders: ordersWithDetails, total };
+  }
+
+  async getTrashedOrders(): Promise<OrderWithDetails[]> {
+    const orderList = await db.select().from(orders)
+      .where(sql`${orders.deletedAt} IS NOT NULL`)
+      .orderBy(desc(orders.deletedAt));
+    
+    return Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
   }
 
   async getOrdersByUser(userId: string): Promise<OrderWithDetails[]> {
     const orderList = await db.select().from(orders)
-      .where(eq(orders.userId, userId))
+      .where(and(eq(orders.userId, userId), sql`${orders.deletedAt} IS NULL`))
       .orderBy(desc(orders.createdAt));
     
-    const result: OrderWithDetails[] = [];
-    
-    for (const order of orderList) {
-      const items = await this.getOrderItems(order.id);
-      const address = order.addressId ? await this.getAddress(order.addressId) : undefined;
-      const payment = await this.getPaymentByOrder(order.id);
-      
-      const itemsWithProducts = await Promise.all(items.map(async (item) => {
-        const product = await this.getProduct(item.productId);
-        return { ...item, product };
-      }));
-      
-      result.push({ ...order, items: itemsWithProducts, address, payment });
-    }
-    
-    return result;
+    return Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
   }
 
   async getOrder(id: string): Promise<OrderWithDetails | undefined> {
@@ -347,14 +368,46 @@ export class DatabaseStorage implements IStorage {
     return result || undefined;
   }
 
-  async deleteOrder(id: string): Promise<boolean> {
+  async softDeleteOrder(id: string): Promise<boolean> {
+    const [result] = await db.update(orders)
+      .set({ deletedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning();
+    return !!result;
+  }
+
+  async softDeleteOrders(ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    await db.update(orders)
+      .set({ deletedAt: new Date() })
+      .where(inArray(orders.id, ids));
+    return true;
+  }
+
+  async restoreOrder(id: string): Promise<boolean> {
+    const [result] = await db.update(orders)
+      .set({ deletedAt: null })
+      .where(eq(orders.id, id))
+      .returning();
+    return !!result;
+  }
+
+  async restoreOrders(ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    await db.update(orders)
+      .set({ deletedAt: null })
+      .where(inArray(orders.id, ids));
+    return true;
+  }
+
+  async permanentlyDeleteOrder(id: string): Promise<boolean> {
     await db.delete(payments).where(eq(payments.orderId, id));
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
     const [result] = await db.delete(orders).where(eq(orders.id, id)).returning();
     return !!result;
   }
 
-  async deleteOrders(ids: string[]): Promise<boolean> {
+  async permanentlyDeleteOrders(ids: string[]): Promise<boolean> {
     if (ids.length === 0) return true;
     await db.delete(payments).where(inArray(payments.orderId, ids));
     await db.delete(orderItems).where(inArray(orderItems.orderId, ids));
