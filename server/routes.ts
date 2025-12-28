@@ -470,6 +470,32 @@ export async function registerRoutes(
     }
   });
 
+  // Get paginated orders (for admin) - MUST be before /:id route
+  app.get("/api/orders/paginated", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = (req.query.search as string) || "";
+      const status = (req.query.status as string) || "all";
+      const result = await storage.getOrdersPaginated(page, limit, false, search, status);
+      res.json(result);
+    } catch (error) {
+      console.error("Get paginated orders error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Get trashed orders - MUST be before /:id route
+  app.get("/api/orders/trash", async (req, res) => {
+    try {
+      const trashedOrders = await storage.getTrashedOrders();
+      res.json(trashedOrders);
+    } catch (error) {
+      console.error("Get trashed orders error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.get("/api/orders/:id", async (req, res) => {
     try {
       const order = await storage.getOrder(req.params.id);
@@ -590,30 +616,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Bulk delete orders error:", error);
       res.status(500).json({ message: "Erreur lors de la suppression" });
-    }
-  });
-
-  // Get paginated orders (for admin)
-  app.get("/api/orders/paginated", async (req, res) => {
-    try {
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const result = await storage.getOrdersPaginated(page, limit);
-      res.json(result);
-    } catch (error) {
-      console.error("Get paginated orders error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
-  // Get trashed orders
-  app.get("/api/orders/trash", async (req, res) => {
-    try {
-      const trashedOrders = await storage.getTrashedOrders();
-      res.json(trashedOrders);
-    } catch (error) {
-      console.error("Get trashed orders error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
     }
   });
 

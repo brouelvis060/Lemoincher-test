@@ -49,7 +49,7 @@ export interface IStorage {
 
   // Orders
   getOrders(includeDeleted?: boolean): Promise<OrderWithDetails[]>;
-  getOrdersPaginated(page: number, limit: number, includeDeleted?: boolean): Promise<{ orders: OrderWithDetails[]; total: number }>;
+  getOrdersPaginated(page: number, limit: number, includeDeleted?: boolean, search?: string, status?: string): Promise<{ orders: OrderWithDetails[]; total: number }>;
   getTrashedOrders(): Promise<OrderWithDetails[]>;
   getOrdersByUser(userId: string): Promise<OrderWithDetails[]>;
   getOrder(id: string): Promise<OrderWithDetails | undefined>;
@@ -298,20 +298,49 @@ export class DatabaseStorage implements IStorage {
     return Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
   }
 
-  async getOrdersPaginated(page: number, limit: number, includeDeleted: boolean = false): Promise<{ orders: OrderWithDetails[]; total: number }> {
+  async getOrdersPaginated(
+    page: number, 
+    limit: number, 
+    includeDeleted: boolean = false,
+    search: string = "",
+    status: string = "all"
+  ): Promise<{ orders: OrderWithDetails[]; total: number }> {
     const offset = (page - 1) * limit;
-    const whereClause = includeDeleted ? undefined : sql`${orders.deletedAt} IS NULL`;
     
-    const [countResult] = await db.select({ count: sql<number>`count(*)` })
-      .from(orders)
-      .where(whereClause);
-    const total = Number(countResult?.count || 0);
+    const conditions: any[] = [];
     
-    const orderList = await db.select().from(orders)
+    if (!includeDeleted) {
+      conditions.push(sql`${orders.deletedAt} IS NULL`);
+    }
+    
+    if (status && status !== "all") {
+      conditions.push(eq(orders.status, status as any));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    let orderList = await db.select().from(orders)
       .where(whereClause)
-      .orderBy(desc(orders.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .orderBy(desc(orders.createdAt));
+    
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const enrichedOrders = await Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
+      const filteredOrders = enrichedOrders.filter(order => 
+        order.orderNumber.toLowerCase().includes(searchLower) ||
+        order.user?.firstName?.toLowerCase().includes(searchLower) ||
+        order.user?.lastName?.toLowerCase().includes(searchLower) ||
+        order.user?.email?.toLowerCase().includes(searchLower)
+      );
+      
+      const total = filteredOrders.length;
+      const paginatedOrders = filteredOrders.slice(offset, offset + limit);
+      
+      return { orders: paginatedOrders, total };
+    }
+    
+    const total = orderList.length;
+    orderList = orderList.slice(offset, offset + limit);
     
     const ordersWithDetails = await Promise.all(orderList.map(order => this.enrichOrderWithDetails(order)));
     

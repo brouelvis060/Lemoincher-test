@@ -82,9 +82,15 @@ export default function AdminOrders() {
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
   const { data: paginatedData, isLoading } = useQuery<{ orders: OrderWithDetails[]; total: number }>({
-    queryKey: ["/api/orders/paginated", currentPage, ORDERS_PER_PAGE],
+    queryKey: ["/api/orders/paginated", currentPage, ORDERS_PER_PAGE, searchQuery, statusFilter],
     queryFn: async () => {
-      const response = await fetch(`/api/orders/paginated?page=${currentPage}&limit=${ORDERS_PER_PAGE}`);
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: ORDERS_PER_PAGE.toString(),
+        search: searchQuery,
+        status: statusFilter,
+      });
+      const response = await fetch(`/api/orders/paginated?${params}`);
       return response.json();
     },
   });
@@ -257,24 +263,17 @@ export default function AdminOrders() {
     },
   });
 
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user?.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user?.lastName?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
   const filteredTrashedOrders = trashedOrders?.filter((order) => {
+    if (!searchQuery) return true;
+    const searchLower = searchQuery.toLowerCase();
     return (
-      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user?.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user?.lastName?.toLowerCase().includes(searchQuery.toLowerCase())
+      order.orderNumber.toLowerCase().includes(searchLower) ||
+      order.user?.firstName?.toLowerCase().includes(searchLower) ||
+      order.user?.lastName?.toLowerCase().includes(searchLower)
     );
   }) || [];
 
-  const currentOrders = activeTab === "orders" ? filteredOrders : filteredTrashedOrders;
+  const currentOrders = activeTab === "orders" ? orders : filteredTrashedOrders;
   const allSelected = currentOrders.length > 0 && selectedOrders.length === currentOrders.length;
   const someSelected = selectedOrders.length > 0 && selectedOrders.length < currentOrders.length;
 
@@ -429,19 +428,19 @@ export default function AdminOrders() {
           <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <CardTitle>{filteredOrders.length} commande{filteredOrders.length > 1 ? "s" : ""}</CardTitle>
+                <CardTitle>{totalOrders} commande{totalOrders > 1 ? "s" : ""}</CardTitle>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Rechercher..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                       className="pl-10"
                       data-testid="input-search"
                     />
                   </div>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}>
                     <SelectTrigger className="w-full sm:w-40" data-testid="select-status-filter">
                       <SelectValue placeholder="Statut" />
                     </SelectTrigger>
@@ -464,7 +463,7 @@ export default function AdminOrders() {
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
-              ) : filteredOrders.length > 0 ? (
+              ) : orders.length > 0 ? (
                 <>
                   <div className="overflow-x-auto">
                     <Table>
@@ -490,7 +489,7 @@ export default function AdminOrders() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredOrders.map((order) => {
+                        {orders.map((order) => {
                           const createdAt = new Date(order.createdAt!);
                           const isSelected = selectedOrders.includes(order.id);
                           return (
