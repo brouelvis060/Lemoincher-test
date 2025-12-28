@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, Save, GripVertical, Image, Link2 } from "lucide-react";
+import { Plus, Trash2, Save, GripVertical, Image, Link2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import type { SiteSettings } from "@shared/schema";
 
 interface Banner {
@@ -78,6 +79,47 @@ export default function AdminHomepageSettings() {
     saveMutation.mutate({ homeBanners: validBanners });
   };
 
+  const handleGetUploadParameters = async (file: any) => {
+    const response = await fetch("/api/uploads/request-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to get upload URL");
+    }
+
+    const data = await response.json();
+    file.meta = { ...file.meta, objectPath: data.objectPath };
+
+    return {
+      method: "PUT" as const,
+      url: data.uploadURL,
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+    };
+  };
+
+  const handleUploadComplete = (index: number) => async (result: any) => {
+    if (result.successful && result.successful.length > 0) {
+      const file = result.successful[0];
+      const uploadedFile = file.data as { objectPath?: string };
+      const objectPath = uploadedFile?.objectPath || file.meta?.objectPath;
+      
+      if (objectPath) {
+        const fullUrl = `${window.location.origin}${objectPath}`;
+        updateBanner(index, "image", fullUrl);
+        toast({ title: "Image téléchargée avec succès" });
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -138,33 +180,38 @@ export default function AdminHomepageSettings() {
                           Bannière {index + 1}
                         </div>
                         
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor={`banner-image-${index}`}>URL de l'image *</Label>
-                            <div className="flex gap-2">
-                              <Input
-                                id={`banner-image-${index}`}
-                                value={banner.image}
-                                onChange={(e) => updateBanner(index, "image", e.target.value)}
-                                placeholder="https://..."
-                                data-testid={`input-banner-image-${index}`}
-                              />
-                            </div>
+                        <div className="space-y-2">
+                          <Label>Image de la bannière *</Label>
+                          <div className="flex items-center gap-2">
+                            <ObjectUploader
+                              maxNumberOfFiles={1}
+                              maxFileSize={10 * 1024 * 1024}
+                              onGetUploadParameters={handleGetUploadParameters}
+                              onComplete={handleUploadComplete(index)}
+                            >
+                              <Upload className="w-4 h-4 mr-2" />
+                              {banner.image ? "Changer l'image" : "Télécharger une image"}
+                            </ObjectUploader>
+                            {banner.image && (
+                              <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                                Image téléchargée
+                              </span>
+                            )}
                           </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor={`banner-link-${index}`}>
-                              <Link2 className="h-3 w-3 inline mr-1" />
-                              Lien (optionnel)
-                            </Label>
-                            <Input
-                              id={`banner-link-${index}`}
-                              value={banner.link || ""}
-                              onChange={(e) => updateBanner(index, "link", e.target.value)}
-                              placeholder="/products ou https://..."
-                              data-testid={`input-banner-link-${index}`}
-                            />
-                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor={`banner-link-${index}`}>
+                            <Link2 className="h-3 w-3 inline mr-1" />
+                            Lien (optionnel)
+                          </Label>
+                          <Input
+                            id={`banner-link-${index}`}
+                            value={banner.link || ""}
+                            onChange={(e) => updateBanner(index, "link", e.target.value)}
+                            placeholder="/products ou https://..."
+                            data-testid={`input-banner-link-${index}`}
+                          />
                         </div>
                         
                         <div className="space-y-2">
