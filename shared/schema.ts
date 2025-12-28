@@ -111,6 +111,7 @@ export const orders = pgTable("orders", {
   paymentMethod: paymentMethodEnum("payment_method").notNull(),
   stationReceiptImage: text("station_receipt_image"),
   clientConfirmedPickup: boolean("client_confirmed_pickup").default(false),
+  paymentExpiresAt: timestamp("payment_expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

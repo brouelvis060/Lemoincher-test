@@ -486,11 +486,16 @@ export async function registerRoutes(
       const orderNumber = generateOrderNumber();
 
       const initialStatus = orderData.paymentMethod === "mobile_money" ? "pending_payment" : "pending";
+      
+      const paymentExpiresAt = orderData.paymentMethod === "mobile_money" 
+        ? new Date(Date.now() + 30 * 60 * 1000)
+        : null;
 
       const order = await storage.createOrder({
         ...orderData,
         orderNumber,
         status: initialStatus,
+        paymentExpiresAt,
       });
 
       for (const item of items) {
@@ -868,6 +873,121 @@ export async function registerRoutes(
       }
     } catch (error) {
       console.error("CinetPay check error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Cancel expired pending_payment orders
+  app.post("/api/orders/cancel-expired", async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      const now = new Date();
+      let cancelledCount = 0;
+
+      for (const order of orders) {
+        if (order.status === "pending_payment" && order.paymentExpiresAt) {
+          const expiresAt = new Date(order.paymentExpiresAt);
+          if (now > expiresAt) {
+            await storage.updateOrder(order.id, { status: "cancelled" });
+            const payment = await storage.getPaymentByOrder(order.id);
+            if (payment) {
+              await storage.updatePayment(payment.id, { status: "failed" });
+            }
+            cancelledCount++;
+            console.log(`Order ${order.orderNumber} cancelled due to payment timeout`);
+          }
+        }
+      }
+
+      res.json({ success: true, cancelledCount });
+    } catch (error) {
+      console.error("Cancel expired orders error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Continue payment for pending_payment order (re-init CinetPay)
+  app.post("/api/orders/:id/continue-payment", async (req, res) => {
+    try {
+      const order = await storage.getOrder(req.params.id);
+      if (!order) {
+        return res.status(404).json({ message: "Commande non trouvée" });
+      }
+
+      if (order.status !== "pending_payment") {
+        return res.status(400).json({ message: "Cette commande ne peut pas être payée" });
+      }
+
+      if (order.paymentExpiresAt) {
+        const expiresAt = new Date(order.paymentExpiresAt);
+        if (new Date() > expiresAt) {
+          await storage.updateOrder(order.id, { status: "cancelled" });
+          return res.status(400).json({ message: "Le délai de paiement a expiré. La commande a été annulée." });
+        }
+      }
+
+      const paymentSettings = await storage.getPaymentSettings();
+      if (!paymentSettings?.cinetpayApiKey || !paymentSettings?.cinetpaySiteId) {
+        return res.status(400).json({ message: "Configuration CinetPay manquante" });
+      }
+
+      const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      
+      const payload = {
+        apikey: paymentSettings.cinetpayApiKey,
+        site_id: paymentSettings.cinetpaySiteId,
+        transaction_id: transactionId,
+        amount: Math.round(parseFloat(order.total)),
+        currency: "XOF",
+        description: `Commande ${order.orderNumber}`,
+        notify_url: `${baseUrl}/api/payments/cinetpay/notify`,
+        return_url: `${baseUrl}/orders/${order.id}?payment=success`,
+        cancel_url: `${baseUrl}/orders/${order.id}?payment=cancelled`,
+        channels: "ALL",
+        metadata: JSON.stringify({ orderId: order.id, orderNumber: order.orderNumber }),
+        customer_name: order.user?.firstName || "Client",
+        customer_surname: order.user?.lastName || "",
+        customer_email: order.user?.email || "",
+        customer_phone_number: order.user?.phone || "",
+        customer_address: order.address?.fullAddress || "",
+        customer_city: order.address?.city || "",
+        customer_country: "CI",
+      };
+
+      const response = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.code === "201" && data.data?.payment_url) {
+        const payment = await storage.getPaymentByOrder(order.id);
+        if (payment) {
+          await storage.updatePayment(payment.id, {
+            transactionId,
+            cinetpayReference: data.data.payment_token,
+          });
+        }
+
+        res.json({
+          success: true,
+          paymentUrl: data.data.payment_url,
+          transactionId,
+        });
+      } else {
+        console.error("CinetPay continue payment error:", data);
+        res.status(400).json({
+          success: false,
+          message: data.message || "Erreur lors de l'initialisation du paiement",
+        });
+      }
+    } catch (error) {
+      console.error("Continue payment error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
