@@ -1,13 +1,14 @@
 import { 
   users, categories, products, addresses, orders, orderItems, 
-  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles, productVariations,
+  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles, productAttributes, productVariations,
   type User, type InsertUser, type Category, type InsertCategory,
   type Product, type InsertProduct, type Address, type InsertAddress,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type Payment, type InsertPayment, type SiteSettings, type InsertSiteSettings,
   type PaymentSettings, type InsertPaymentSettings, type SmsSettings, type InsertSmsSettings,
   type ShippingRule, type InsertShippingRule, type CartItem, type InsertCartItem,
-  type MediaFile, type InsertMediaFile, type ProductVariation, type InsertProductVariation,
+  type MediaFile, type InsertMediaFile, type ProductAttribute, type InsertProductAttribute,
+  type ProductVariation, type InsertProductVariation,
   type ProductWithCategory, type OrderWithDetails, type CartItemWithProduct
 } from "@shared/schema";
 import { db } from "./db";
@@ -88,6 +89,13 @@ export interface IStorage {
   getMediaFile(id: string): Promise<MediaFile | undefined>;
   createMediaFile(file: InsertMediaFile): Promise<MediaFile>;
   deleteMediaFile(id: string): Promise<boolean>;
+
+  // Product Attributes
+  getProductAttributes(productId: string): Promise<ProductAttribute[]>;
+  createProductAttribute(attribute: InsertProductAttribute): Promise<ProductAttribute>;
+  updateProductAttribute(id: string, data: Partial<InsertProductAttribute>): Promise<ProductAttribute | undefined>;
+  deleteProductAttribute(id: string): Promise<boolean>;
+  deleteProductAttributes(productId: string): Promise<boolean>;
 
   // Product Variations
   getProductVariations(productId: string): Promise<ProductVariation[]>;
@@ -501,6 +509,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMediaFile(id: string): Promise<boolean> {
     await db.delete(mediaFiles).where(eq(mediaFiles.id, id));
+    return true;
+  }
+
+  // Product Attributes
+  async getProductAttributes(productId: string): Promise<ProductAttribute[]> {
+    return await db.select().from(productAttributes).where(eq(productAttributes.productId, productId));
+  }
+
+  async createProductAttribute(attribute: InsertProductAttribute): Promise<ProductAttribute> {
+    const [result] = await db.insert(productAttributes).values(attribute).returning();
+    return result;
+  }
+
+  async updateProductAttribute(id: string, data: Partial<InsertProductAttribute>): Promise<ProductAttribute | undefined> {
+    const [result] = await db.update(productAttributes).set(data).where(eq(productAttributes.id, id)).returning();
+    return result || undefined;
+  }
+
+  async deleteProductAttribute(id: string): Promise<boolean> {
+    await db.delete(productAttributes).where(eq(productAttributes.id, id));
+    return true;
+  }
+
+  async deleteProductAttributes(productId: string): Promise<boolean> {
+    await db.delete(productAttributes).where(eq(productAttributes.productId, productId));
     return true;
   }
 
