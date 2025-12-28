@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, FolderTree } from "lucide-react";
+import { Plus, Edit, Trash2, FolderTree, Upload, X, Image } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,7 @@ import type { Category } from "@shared/schema";
 const categorySchema = z.object({
   name: z.string().min(2, "Nom requis"),
   description: z.string().optional(),
+  image: z.string().optional(),
   isActive: z.boolean(),
 });
 
@@ -46,6 +48,7 @@ export default function AdminCategories() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>("");
 
   const { data: categories, isLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -56,6 +59,7 @@ export default function AdminCategories() {
     defaultValues: {
       name: "",
       description: "",
+      image: "",
       isActive: true,
     },
   });
@@ -64,9 +68,11 @@ export default function AdminCategories() {
     form.reset({
       name: "",
       description: "",
+      image: "",
       isActive: true,
     });
     setEditingCategory(null);
+    setImageUrl("");
   };
 
   const openEditDialog = (category: Category) => {
@@ -74,9 +80,51 @@ export default function AdminCategories() {
     form.reset({
       name: category.name,
       description: category.description || "",
+      image: category.image || "",
       isActive: category.isActive ?? true,
     });
+    setImageUrl(category.image || "");
     setShowDialog(true);
+  };
+
+  const handleGetUploadParameters = async (file: any) => {
+    const response = await fetch("/api/uploads/request-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to get upload URL");
+    }
+
+    const data = await response.json();
+    file.meta = { ...file.meta, objectPath: data.objectPath };
+
+    return {
+      method: "PUT" as const,
+      url: data.uploadURL,
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+    };
+  };
+
+  const handleUploadComplete = (result: any) => {
+    if (result.successful && result.successful.length > 0) {
+      const file = result.successful[0];
+      const objectPath = file.meta?.objectPath;
+      if (objectPath) {
+        const fullUrl = `${window.location.origin}${objectPath}`;
+        setImageUrl(fullUrl);
+        form.setValue("image", fullUrl);
+        toast({ title: "Image téléchargée" });
+      }
+    }
   };
 
   const saveMutation = useMutation({
@@ -188,6 +236,47 @@ export default function AdminCategories() {
                   )}
                 />
 
+                <FormItem>
+                  <FormLabel>Image *</FormLabel>
+                  <div className="space-y-3">
+                    {imageUrl ? (
+                      <div className="relative">
+                        <img
+                          src={imageUrl}
+                          alt="Aperçu"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="destructive"
+                          className="absolute top-2 right-2 h-6 w-6"
+                          onClick={() => {
+                            setImageUrl("");
+                            form.setValue("image", "");
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                        <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <ObjectUploader
+                          maxNumberOfFiles={1}
+                          maxFileSize={5 * 1024 * 1024}
+                          onGetUploadParameters={handleGetUploadParameters}
+                          onComplete={handleUploadComplete}
+                          buttonClassName="mt-2"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Télécharger une image
+                        </ObjectUploader>
+                      </div>
+                    )}
+                  </div>
+                </FormItem>
+
                 <FormField
                   control={form.control}
                   name="isActive"
@@ -243,9 +332,17 @@ export default function AdminCategories() {
                   data-testid={`category-item-${category.id}`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
-                      {category.name[0]}
-                    </div>
+                    {category.image ? (
+                      <img
+                        src={category.image}
+                        alt={category.name}
+                        className="h-10 w-10 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {category.name[0]}
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{category.name}</span>
