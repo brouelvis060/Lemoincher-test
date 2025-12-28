@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Save, Upload, X, Image, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, Image, Plus, Trash2, RefreshCw, Settings } from "lucide-react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,14 +13,22 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { ProductWithCategory, Category, ProductVariation } from "@shared/schema";
+import type { ProductWithCategory, Category, ProductVariation, ProductAttribute } from "@shared/schema";
+
+const attributeSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Nom requis"),
+  values: z.array(z.string()).min(1, "Au moins une valeur requise"),
+});
 
 const variationSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, "Nom requis"),
+  attributeValues: z.string(),
+  sku: z.string().optional(),
   price: z.string().min(1, "Prix requis"),
   stock: z.coerce.number().min(0, "Stock invalide"),
   weight: z.string().optional(),
@@ -38,10 +46,12 @@ const productSchema = z.object({
   categoryId: z.string().optional(),
   images: z.array(z.string()).optional(),
   isActive: z.boolean(),
+  attributes: z.array(attributeSchema).optional(),
   variations: z.array(variationSchema).optional(),
 });
 
 type ProductForm = z.infer<typeof productSchema>;
+type AttributeForm = z.infer<typeof attributeSchema>;
 
 export default function AdminProductForm() {
   const [, params] = useRoute("/admin/products/:id");
@@ -50,6 +60,9 @@ export default function AdminProductForm() {
   const isEditing = params?.id && params.id !== "new";
   const productId = isEditing ? params.id : null;
   const [uploaderKey, setUploaderKey] = useState(0);
+  const [newAttributeName, setNewAttributeName] = useState("");
+  const [newAttributeValue, setNewAttributeValue] = useState("");
+  const [editingAttributeIndex, setEditingAttributeIndex] = useState<number | null>(null);
 
   const { data: product, isLoading: productLoading } = useQuery<ProductWithCategory>({
     queryKey: ["/api/products", productId],
@@ -58,6 +71,16 @@ export default function AdminProductForm() {
 
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
+  });
+
+  const { data: productAttributes } = useQuery<ProductAttribute[]>({
+    queryKey: ["/api/products", productId, "attributes"],
+    enabled: !!productId,
+  });
+
+  const { data: productVariations } = useQuery<ProductVariation[]>({
+    queryKey: ["/api/products", productId, "variations"],
+    enabled: !!productId,
   });
 
   const form = useForm<ProductForm>({
@@ -72,19 +95,43 @@ export default function AdminProductForm() {
       categoryId: "",
       images: [],
       isActive: true,
+      attributes: [],
       variations: [],
     },
   });
 
-  const { fields: variationFields, append: appendVariation, remove: removeVariation } = useFieldArray({
+  const { fields: attributeFields, append: appendAttribute, remove: removeAttribute, update: updateAttribute } = useFieldArray({
+    control: form.control,
+    name: "attributes",
+  });
+
+  const { fields: variationFields, replace: replaceVariations, remove: removeVariation } = useFieldArray({
     control: form.control,
     name: "variations",
   });
 
   const productType = form.watch("productType");
+  const attributes = form.watch("attributes");
 
   useEffect(() => {
     if (product) {
+      const loadedAttributes = productAttributes?.map(attr => ({
+        id: attr.id,
+        name: attr.name,
+        values: attr.values || [],
+      })) || [];
+
+      const loadedVariations = productVariations?.map(v => ({
+        id: v.id,
+        attributeValues: v.attributeValues || "",
+        sku: v.sku || "",
+        price: v.price,
+        stock: v.stock || 0,
+        weight: v.weight || "",
+        image: v.image || "",
+        isActive: v.isActive ?? true,
+      })) || [];
+
       form.reset({
         name: product.name,
         description: product.description || "",
@@ -95,18 +142,11 @@ export default function AdminProductForm() {
         categoryId: product.categoryId || "",
         images: product.images || [],
         isActive: product.isActive ?? true,
-        variations: product.variations?.map(v => ({
-          id: v.id,
-          name: v.name,
-          price: v.price,
-          stock: v.stock || 0,
-          weight: v.weight || "",
-          image: v.image || "",
-          isActive: v.isActive ?? true,
-        })) || [],
+        attributes: loadedAttributes,
+        variations: loadedVariations,
       });
     }
-  }, [product, form]);
+  }, [product, productAttributes, productVariations, form]);
 
   const handleGetUploadParameters = async (file: any) => {
     const response = await fetch("/api/uploads/request-url", {
@@ -135,9 +175,97 @@ export default function AdminProductForm() {
     };
   };
 
+  const addAttribute = () => {
+    if (!newAttributeName.trim()) {
+      toast({ title: "Erreur", description: "Nom de l'attribut requis", variant: "destructive" });
+      return;
+    }
+    appendAttribute({
+      name: newAttributeName.trim(),
+      values: [],
+    });
+    setNewAttributeName("");
+  };
+
+  const addValueToAttribute = (index: number) => {
+    if (!newAttributeValue.trim()) return;
+    const currentAttribute = attributeFields[index];
+    const currentValues = form.getValues(`attributes.${index}.values`) || [];
+    if (currentValues.includes(newAttributeValue.trim())) {
+      toast({ title: "Erreur", description: "Cette valeur existe déjà", variant: "destructive" });
+      return;
+    }
+    updateAttribute(index, {
+      ...currentAttribute,
+      values: [...currentValues, newAttributeValue.trim()],
+    });
+    setNewAttributeValue("");
+  };
+
+  const removeValueFromAttribute = (attrIndex: number, valueIndex: number) => {
+    const currentAttribute = attributeFields[attrIndex];
+    const currentValues = form.getValues(`attributes.${attrIndex}.values`) || [];
+    updateAttribute(attrIndex, {
+      ...currentAttribute,
+      values: currentValues.filter((_, i) => i !== valueIndex),
+    });
+  };
+
+  const generateVariations = () => {
+    const currentAttributes = form.getValues("attributes") || [];
+    if (currentAttributes.length === 0) {
+      toast({ title: "Erreur", description: "Ajoutez au moins un attribut", variant: "destructive" });
+      return;
+    }
+
+    const validAttributes = currentAttributes.filter(attr => attr.values && attr.values.length > 0);
+    if (validAttributes.length === 0) {
+      toast({ title: "Erreur", description: "Ajoutez des valeurs à vos attributs", variant: "destructive" });
+      return;
+    }
+
+    const generateCombinations = (attrs: AttributeForm[]): string[][] => {
+      if (attrs.length === 0) return [[]];
+      const [first, ...rest] = attrs;
+      const restCombinations = generateCombinations(rest);
+      const combinations: string[][] = [];
+      for (const value of first.values) {
+        for (const restCombo of restCombinations) {
+          combinations.push([`${first.name}: ${value}`, ...restCombo]);
+        }
+      }
+      return combinations;
+    };
+
+    const combinations = generateCombinations(validAttributes);
+    const existingVariations = form.getValues("variations") || [];
+    const basePrice = form.getValues("price") || "0";
+    
+    const newVariations = combinations.map(combo => {
+      const attributeValuesStr = combo.join(" | ");
+      const existing = existingVariations.find(v => v.attributeValues === attributeValuesStr);
+      return {
+        id: existing?.id,
+        attributeValues: attributeValuesStr,
+        sku: existing?.sku || "",
+        price: existing?.price || basePrice,
+        stock: existing?.stock ?? 0,
+        weight: existing?.weight || "",
+        image: existing?.image || "",
+        isActive: existing?.isActive ?? true,
+      };
+    });
+
+    replaceVariations(newVariations);
+    toast({ 
+      title: "Variations générées", 
+      description: `${newVariations.length} variation(s) créée(s)` 
+    });
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (data: ProductForm) => {
-      const { variations, ...productData } = data;
+      const { variations, attributes, ...productData } = data;
       const payload = {
         ...productData,
         images: productData.images || [],
@@ -149,16 +277,24 @@ export default function AdminProductForm() {
         const response = await apiRequest("PATCH", `/api/products/${productId}`, payload);
         savedProduct = await response.json();
         
-        // Handle variations for variable products
         if (data.productType === "variable") {
-          // Delete all existing variations first
+          await apiRequest("DELETE", `/api/products/${productId}/attributes`);
           await apiRequest("DELETE", `/api/products/${productId}/variations`);
           
-          // Create new variations
+          if (attributes && attributes.length > 0) {
+            for (const attr of attributes) {
+              await apiRequest("POST", `/api/products/${productId}/attributes`, {
+                name: attr.name,
+                values: attr.values,
+              });
+            }
+          }
+          
           if (variations && variations.length > 0) {
             for (const variation of variations) {
               await apiRequest("POST", `/api/products/${productId}/variations`, {
-                name: variation.name,
+                attributeValues: variation.attributeValues,
+                sku: variation.sku || null,
                 price: variation.price,
                 stock: variation.stock,
                 weight: variation.weight || "0",
@@ -172,17 +308,28 @@ export default function AdminProductForm() {
         const response = await apiRequest("POST", "/api/products", payload);
         savedProduct = await response.json();
         
-        // Handle variations for variable products
-        if (data.productType === "variable" && variations && variations.length > 0) {
-          for (const variation of variations) {
-            await apiRequest("POST", `/api/products/${savedProduct.id}/variations`, {
-              name: variation.name,
-              price: variation.price,
-              stock: variation.stock,
-              weight: variation.weight || "0",
-              image: variation.image || null,
-              isActive: variation.isActive,
-            });
+        if (data.productType === "variable") {
+          if (attributes && attributes.length > 0) {
+            for (const attr of attributes) {
+              await apiRequest("POST", `/api/products/${savedProduct.id}/attributes`, {
+                name: attr.name,
+                values: attr.values,
+              });
+            }
+          }
+          
+          if (variations && variations.length > 0) {
+            for (const variation of variations) {
+              await apiRequest("POST", `/api/products/${savedProduct.id}/variations`, {
+                attributeValues: variation.attributeValues,
+                sku: variation.sku || null,
+                price: variation.price,
+                stock: variation.stock,
+                weight: variation.weight || "0",
+                image: variation.image || null,
+                isActive: variation.isActive,
+              });
+            }
           }
         }
       }
@@ -325,7 +472,6 @@ export default function AdminProductForm() {
                                       const fullUrl = `${window.location.origin}${objectPath}`;
                                       newUrls.push(fullUrl);
                                       
-                                      // Register in media library
                                       await apiRequest("POST", "/api/media", {
                                         name: file.name,
                                         originalName: file.name,
@@ -374,6 +520,9 @@ export default function AdminProductForm() {
                           <FormControl>
                             <Input type="number" placeholder="0" {...field} data-testid="input-price" />
                           </FormControl>
+                          <FormDescription>
+                            {productType === "variable" && "Prix de base pour les variations"}
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -411,147 +560,270 @@ export default function AdminProductForm() {
               </Card>
 
               {productType === "variable" && (
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between gap-2">
-                    <CardTitle>Variations</CardTitle>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => appendVariation({
-                        name: "",
-                        price: "",
-                        stock: 0,
-                        weight: "",
-                        image: "",
-                        isActive: true,
-                      })}
-                      data-testid="button-add-variation"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Ajouter
-                    </Button>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {variationFields.length === 0 ? (
-                      <div className="text-center py-6 text-muted-foreground">
-                        Aucune variation. Cliquez sur "Ajouter" pour créer une variation.
+                <>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between gap-2">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Settings className="h-5 w-5" />
+                          Attributs
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Définissez les attributs comme Taille, Couleur, etc.
+                        </p>
                       </div>
-                    ) : (
-                      variationFields.map((field, index) => (
-                        <div key={field.id} className="border rounded-lg p-4 space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-sm">Variation {index + 1}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeVariation(index)}
-                              data-testid={`button-remove-variation-${index}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                          
-                          <FormField
-                            control={form.control}
-                            name={`variations.${index}.name`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Nom *</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    placeholder="Ex: Rouge - Taille M" 
-                                    {...field} 
-                                    data-testid={`input-variation-name-${index}`}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <div className="grid grid-cols-3 gap-3">
-                            <FormField
-                              control={form.control}
-                              name={`variations.${index}.price`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Prix *</FormLabel>
-                                  <FormControl>
-                                    <Input 
-                                      type="number" 
-                                      placeholder="0" 
-                                      {...field} 
-                                      data-testid={`input-variation-price-${index}`}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            
-                            <FormField
-                              control={form.control}
-                              name={`variations.${index}.stock`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Stock</FormLabel>
-                                  <FormControl>
-                                    <Input 
-                                      type="number" 
-                                      placeholder="0" 
-                                      {...field} 
-                                      data-testid={`input-variation-stock-${index}`}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            
-                            <FormField
-                              control={form.control}
-                              name={`variations.${index}.weight`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Poids (kg)</FormLabel>
-                                  <FormControl>
-                                    <Input 
-                                      type="number" 
-                                      step="0.1" 
-                                      placeholder="0" 
-                                      {...field} 
-                                      data-testid={`input-variation-weight-${index}`}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          
-                          <FormField
-                            control={form.control}
-                            name={`variations.${index}.isActive`}
-                            render={({ field }) => (
-                              <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                                <FormLabel className="text-sm">Actif</FormLabel>
-                                <FormControl>
-                                  <Switch
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                    data-testid={`switch-variation-active-${index}`}
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Nom de l'attribut (ex: Couleur, Taille)"
+                          value={newAttributeName}
+                          onChange={(e) => setNewAttributeName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAttribute())}
+                          data-testid="input-new-attribute-name"
+                        />
+                        <Button 
+                          type="button" 
+                          onClick={addAttribute}
+                          data-testid="button-add-attribute"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Ajouter
+                        </Button>
+                      </div>
+
+                      {attributeFields.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                          Aucun attribut. Ajoutez des attributs comme "Couleur" ou "Taille".
                         </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
+                      ) : (
+                        <div className="space-y-4">
+                          {attributeFields.map((field, attrIndex) => (
+                            <div key={field.id} className="border rounded-lg p-4 space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">{field.name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeAttribute(attrIndex)}
+                                  data-testid={`button-remove-attribute-${attrIndex}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-2">
+                                {(form.getValues(`attributes.${attrIndex}.values`) || []).map((value, valueIndex) => (
+                                  <Badge key={valueIndex} variant="secondary" className="gap-1">
+                                    {value}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeValueFromAttribute(attrIndex, valueIndex)}
+                                      className="ml-1 hover:text-destructive"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </Badge>
+                                ))}
+                              </div>
+
+                              {editingAttributeIndex === attrIndex ? (
+                                <div className="flex gap-2">
+                                  <Input
+                                    placeholder={`Nouvelle valeur pour ${field.name}`}
+                                    value={newAttributeValue}
+                                    onChange={(e) => setNewAttributeValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        addValueToAttribute(attrIndex);
+                                      } else if (e.key === "Escape") {
+                                        setEditingAttributeIndex(null);
+                                        setNewAttributeValue("");
+                                      }
+                                    }}
+                                    autoFocus
+                                    data-testid={`input-attribute-value-${attrIndex}`}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => addValueToAttribute(attrIndex)}
+                                  >
+                                    Ajouter
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingAttributeIndex(null);
+                                      setNewAttributeValue("");
+                                    }}
+                                  >
+                                    Annuler
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingAttributeIndex(attrIndex)}
+                                  data-testid={`button-add-value-${attrIndex}`}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Ajouter une valeur
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {attributeFields.length > 0 && (
+                        <Button
+                          type="button"
+                          onClick={generateVariations}
+                          className="w-full"
+                          data-testid="button-generate-variations"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Générer les variations
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Variations ({variationFields.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {variationFields.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                          Aucune variation. Ajoutez des attributs et cliquez sur "Générer les variations".
+                        </div>
+                      ) : (
+                        variationFields.map((field, index) => (
+                          <div key={field.id} className="border rounded-lg p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {field.attributeValues.split(" | ").map((attr, i) => (
+                                  <Badge key={i} variant="outline">
+                                    {attr}
+                                  </Badge>
+                                ))}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeVariation(index)}
+                                data-testid={`button-remove-variation-${index}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <FormField
+                                control={form.control}
+                                name={`variations.${index}.sku`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs">SKU</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        placeholder="REF-001" 
+                                        {...field} 
+                                        data-testid={`input-variation-sku-${index}`}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={form.control}
+                                name={`variations.${index}.price`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs">Prix (F CFA) *</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        {...field} 
+                                        data-testid={`input-variation-price-${index}`}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={form.control}
+                                name={`variations.${index}.stock`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs">Stock</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        {...field} 
+                                        data-testid={`input-variation-stock-${index}`}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={form.control}
+                                name={`variations.${index}.weight`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs">Poids (kg)</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        type="number" 
+                                        step="0.1" 
+                                        placeholder="0" 
+                                        {...field} 
+                                        data-testid={`input-variation-weight-${index}`}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            
+                            <FormField
+                              control={form.control}
+                              name={`variations.${index}.isActive`}
+                              render={({ field }) => (
+                                <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                                  <FormLabel className="text-sm">Actif</FormLabel>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid={`switch-variation-active-${index}`}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
               )}
             </div>
 
@@ -580,7 +852,7 @@ export default function AdminProductForm() {
                         </Select>
                         <FormDescription>
                           {field.value === "variable" 
-                            ? "Ajoutez des variations après avoir enregistré" 
+                            ? "Définissez des attributs et générez des variations" 
                             : "Un seul prix et stock"}
                         </FormDescription>
                         <FormMessage />
