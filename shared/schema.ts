@@ -51,10 +51,18 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const productVariations = pgTable("product_variations", {
+export const productAttributes = pgTable("product_attributes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   productId: varchar("product_id").references(() => products.id).notNull(),
   name: text("name").notNull(),
+  values: text("values").array().notNull(),
+});
+
+export const productVariations = pgTable("product_variations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  attributeValues: text("attribute_values").notNull(),
+  sku: text("sku"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   stock: integer("stock").default(0),
   weight: decimal("weight", { precision: 10, scale: 2 }).default("0"),
@@ -189,9 +197,17 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     fields: [products.categoryId],
     references: [categories.id],
   }),
+  attributes: many(productAttributes),
   variations: many(productVariations),
   orderItems: many(orderItems),
   cartItems: many(cartItems),
+}));
+
+export const productAttributesRelations = relations(productAttributes, ({ one }) => ({
+  product: one(products, {
+    fields: [productAttributes.productId],
+    references: [products.id],
+  }),
 }));
 
 export const productVariationsRelations = relations(productVariations, ({ one }) => ({
@@ -264,6 +280,7 @@ export const insertSmsSettingsSchema = createInsertSchema(smsSettings).omit({ id
 export const insertShippingRuleSchema = createInsertSchema(shippingRules).omit({ id: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertMediaFileSchema = createInsertSchema(mediaFiles).omit({ id: true, createdAt: true });
+export const insertProductAttributeSchema = createInsertSchema(productAttributes).omit({ id: true });
 export const insertProductVariationSchema = createInsertSchema(productVariations).omit({ id: true });
 
 // Types
@@ -293,11 +310,13 @@ export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
 export type InsertMediaFile = z.infer<typeof insertMediaFileSchema>;
 export type MediaFile = typeof mediaFiles.$inferSelect;
+export type InsertProductAttribute = z.infer<typeof insertProductAttributeSchema>;
+export type ProductAttribute = typeof productAttributes.$inferSelect;
 export type InsertProductVariation = z.infer<typeof insertProductVariationSchema>;
 export type ProductVariation = typeof productVariations.$inferSelect;
 
 // Extended types for frontend
-export type ProductWithCategory = Product & { category?: Category; variations?: ProductVariation[] };
+export type ProductWithCategory = Product & { category?: Category; attributes?: ProductAttribute[]; variations?: ProductVariation[] };
 export type OrderWithDetails = Order & { 
   items: (OrderItem & { product?: Product })[];
   address?: Address;
