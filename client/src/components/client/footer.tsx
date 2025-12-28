@@ -1,7 +1,15 @@
 import { Link } from "wouter";
 import { Package, Phone, Mail, MapPin } from "lucide-react";
+import { useSiteSettings } from "@/lib/site-settings";
 
 export function ClientFooter() {
+  const { settings } = useSiteSettings();
+  
+  const siteName = settings?.siteName || "Lemoincher";
+  const phone = settings?.phone || "+225 07 00 00 00 00";
+  const email = settings?.email || "infos@lemoincher.com";
+  const address = settings?.address || "Abidjan, Côte d'Ivoire";
+
   return (
     <footer className="border-t bg-card">
       <div className="container px-4 py-12">
@@ -11,7 +19,7 @@ export function ClientFooter() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Package className="h-5 w-5" />
               </div>
-              <span className="text-xl font-bold">Lemoincher</span>
+              <span className="text-xl font-bold">{siteName}</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Votre destination shopping en ligne en Afrique. Livraison rapide et paiement Mobile Money.
@@ -53,15 +61,15 @@ export function ClientFooter() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="h-4 w-4" />
-                <span>+225 07 00 00 00 00</span>
+                <span>{phone}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Mail className="h-4 w-4" />
-                <span>infos@lemoincher.com</span>
+                <span>{email}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4" />
-                <span>Abidjan, Côte d'Ivoire</span>
+                <span>{address}</span>
               </div>
             </div>
           </div>
@@ -69,7 +77,7 @@ export function ClientFooter() {
 
         <div className="mt-12 border-t pt-6">
           <p className="text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Lemoincher. Tous droits réservés.
+            © {new Date().getFullYear()} {siteName}. Tous droits réservés.
           </p>
         </div>
       </div>

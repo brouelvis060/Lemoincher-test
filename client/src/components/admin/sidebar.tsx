@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { useSiteSettings } from "@/lib/site-settings";
 
 const mainMenuItems = [
   { title: "Tableau de bord", url: "/admin", icon: LayoutDashboard },
@@ -46,6 +47,9 @@ const settingsMenuItems = [
 export function AdminSidebar() {
   const [location, navigate] = useLocation();
   const { logout } = useAuth();
+  const { settings } = useSiteSettings();
+  
+  const siteName = settings?.siteName || "Lemoincher";
 
   const handleLogout = () => {
     logout();
@@ -60,7 +64,7 @@ export function AdminSidebar() {
             <Store className="h-5 w-5" />
           </div>
           <div>
-            <span className="font-bold text-lg">Lemoincher</span>
+            <span className="font-bold text-lg">{siteName}</span>
             <p className="text-xs text-muted-foreground">Administration</p>
           </div>
         </Link>

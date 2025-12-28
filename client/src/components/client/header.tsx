@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
+import { useSiteSettings } from "@/lib/site-settings";
 import { useState } from "react";
 
 const navLinks = [
@@ -26,7 +27,10 @@ export function ClientHeader() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const { totalItems } = useCart();
+  const { settings } = useSiteSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const siteName = settings?.siteName || "Lemoincher";
 
   const handleLogout = () => {
     logout();
@@ -42,7 +46,7 @@ export function ClientHeader() {
               <Package className="h-5 w-5" />
             </div>
             <span className="text-xl font-bold hidden sm:inline-block" data-testid="text-logo">
-              Lemoincher
+              {siteName}
             </span>
           </Link>
 
