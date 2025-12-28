@@ -566,9 +566,10 @@ export async function registerRoutes(
     }
   });
 
+  // Soft delete - moves to trash
   app.delete("/api/orders/:id", async (req, res) => {
     try {
-      const success = await storage.deleteOrder(req.params.id);
+      const success = await storage.softDeleteOrder(req.params.id);
       if (!success) return res.status(404).json({ message: "Commande non trouvée" });
       res.json({ success: true });
     } catch (error) {
@@ -577,17 +578,96 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk soft delete - moves to trash
   app.post("/api/orders/bulk-delete", async (req, res) => {
     try {
       const { ids } = req.body;
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ message: "Liste d'IDs requise" });
       }
-      await storage.deleteOrders(ids);
+      await storage.softDeleteOrders(ids);
       res.json({ success: true, deletedCount: ids.length });
     } catch (error) {
       console.error("Bulk delete orders error:", error);
       res.status(500).json({ message: "Erreur lors de la suppression" });
+    }
+  });
+
+  // Get paginated orders (for admin)
+  app.get("/api/orders/paginated", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const result = await storage.getOrdersPaginated(page, limit);
+      res.json(result);
+    } catch (error) {
+      console.error("Get paginated orders error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Get trashed orders
+  app.get("/api/orders/trash", async (req, res) => {
+    try {
+      const trashedOrders = await storage.getTrashedOrders();
+      res.json(trashedOrders);
+    } catch (error) {
+      console.error("Get trashed orders error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Restore single order from trash
+  app.post("/api/orders/:id/restore", async (req, res) => {
+    try {
+      const success = await storage.restoreOrder(req.params.id);
+      if (!success) return res.status(404).json({ message: "Commande non trouvée" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Restore order error:", error);
+      res.status(500).json({ message: "Erreur lors de la restauration" });
+    }
+  });
+
+  // Bulk restore orders from trash
+  app.post("/api/orders/bulk-restore", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Liste d'IDs requise" });
+      }
+      await storage.restoreOrders(ids);
+      res.json({ success: true, restoredCount: ids.length });
+    } catch (error) {
+      console.error("Bulk restore orders error:", error);
+      res.status(500).json({ message: "Erreur lors de la restauration" });
+    }
+  });
+
+  // Permanently delete single order
+  app.delete("/api/orders/:id/permanent", async (req, res) => {
+    try {
+      const success = await storage.permanentlyDeleteOrder(req.params.id);
+      if (!success) return res.status(404).json({ message: "Commande non trouvée" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Permanent delete order error:", error);
+      res.status(500).json({ message: "Erreur lors de la suppression définitive" });
+    }
+  });
+
+  // Bulk permanently delete orders
+  app.post("/api/orders/bulk-permanent-delete", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Liste d'IDs requise" });
+      }
+      await storage.permanentlyDeleteOrders(ids);
+      res.json({ success: true, deletedCount: ids.length });
+    } catch (error) {
+      console.error("Bulk permanent delete orders error:", error);
+      res.status(500).json({ message: "Erreur lors de la suppression définitive" });
     }
   });
 
