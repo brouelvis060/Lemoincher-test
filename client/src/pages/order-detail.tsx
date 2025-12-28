@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { ArrowLeft, Package, MapPin, CreditCard, Truck, Upload, CheckCircle } from "lucide-react";
+import { ArrowLeft, Package, MapPin, CreditCard, Truck, Upload, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -12,7 +12,47 @@ import { OrderStatusBadge } from "@/components/client/order-status-badge";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useState, useEffect } from "react";
 import type { OrderWithDetails } from "@shared/schema";
+
+function PaymentCountdown({ expiresAt, onExpire }: { expiresAt: string; onExpire?: () => void }) {
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const expiry = new Date(expiresAt).getTime();
+      const now = Date.now();
+      return Math.max(0, Math.floor((expiry - now) / 1000));
+    };
+
+    setTimeLeft(calculateTimeLeft());
+
+    const interval = setInterval(() => {
+      const remaining = calculateTimeLeft();
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        onExpire?.();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt, onExpire]);
+
+  if (timeLeft <= 0) return null;
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+
+  return (
+    <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400" data-testid="payment-countdown">
+      <Clock className="h-5 w-5" />
+      <span className="text-lg font-medium">
+        Temps restant: {minutes.toString().padStart(2, "0")}:{seconds.toString().padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
 
 const statusSteps = [
   { status: "pending", label: "Commande reçue", icon: Package },
@@ -54,6 +94,26 @@ export default function OrderDetailPage() {
         description: "Impossible de confirmer le retrait",
         variant: "destructive",
       });
+    },
+  });
+
+  const continuePaymentMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/orders/${orderId}/continue-payment`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de continuer le paiement",
+        variant: "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders", orderId] });
     },
   });
 
@@ -153,6 +213,34 @@ export default function OrderDetailPage() {
             </div>
             <OrderStatusBadge status={order.status} />
           </div>
+
+          {order.status === "pending_payment" && order.paymentExpiresAt && new Date(String(order.paymentExpiresAt)) > new Date() && (
+            <Card className="mb-6 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20">
+              <CardContent className="p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Paiement en attente</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Veuillez finaliser votre paiement avant l'expiration du délai.
+                    </p>
+                    <PaymentCountdown 
+                      expiresAt={String(order.paymentExpiresAt)} 
+                      onExpire={() => queryClient.invalidateQueries({ queryKey: ["/api/orders", orderId] })}
+                    />
+                  </div>
+                  <Button
+                    size="lg"
+                    onClick={() => continuePaymentMutation.mutate()}
+                    disabled={continuePaymentMutation.isPending}
+                    data-testid="button-continue-payment"
+                  >
+                    <CreditCard className="h-5 w-5 mr-2" />
+                    {continuePaymentMutation.isPending ? "Chargement..." : "Continuer le paiement"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-6">

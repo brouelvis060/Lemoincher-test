@@ -880,7 +880,7 @@ export async function registerRoutes(
   // Cancel expired pending_payment orders
   app.post("/api/orders/cancel-expired", async (req, res) => {
     try {
-      const orders = await storage.getAllOrders();
+      const orders = await storage.getOrders();
       const now = new Date();
       let cancelledCount = 0;
 

@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Package, ArrowRight, Eye } from "lucide-react";
+import { Package, ArrowRight, Eye, Clock, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,14 +8,77 @@ import { ClientHeader } from "@/components/client/header";
 import { ClientFooter } from "@/components/client/footer";
 import { OrderStatusBadge } from "@/components/client/order-status-badge";
 import { useAuth } from "@/lib/auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
 import type { OrderWithDetails } from "@shared/schema";
+
+function PaymentCountdown({ expiresAt }: { expiresAt: string }) {
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const expiry = new Date(expiresAt).getTime();
+      const now = Date.now();
+      return Math.max(0, Math.floor((expiry - now) / 1000));
+    };
+
+    setTimeLeft(calculateTimeLeft());
+
+    const interval = setInterval(() => {
+      const remaining = calculateTimeLeft();
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        queryClient.invalidateQueries({ queryKey: ["/api/orders/user"] });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  if (timeLeft <= 0) return null;
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+
+  return (
+    <div className="flex items-center gap-1 text-sm text-orange-600 dark:text-orange-400" data-testid="payment-countdown">
+      <Clock className="h-4 w-4" />
+      <span>
+        {minutes.toString().padStart(2, "0")}:{seconds.toString().padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
 
 export default function OrdersPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const { data: orders, isLoading } = useQuery<OrderWithDetails[]>({
     queryKey: ["/api/orders/user", user?.id],
     enabled: !!user,
+  });
+
+  const continuePaymentMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await apiRequest("POST", `/api/orders/${orderId}/continue-payment`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de continuer le paiement",
+        variant: "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/user", user?.id] });
+    },
   });
 
   if (!user) {
@@ -79,11 +142,14 @@ export default function OrdersPage() {
                     <CardContent className="p-6">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 flex-wrap">
                             <h3 className="font-semibold">
                               Commande #{order.orderNumber}
                             </h3>
                             <OrderStatusBadge status={order.status} />
+                            {order.status === "pending_payment" && order.paymentExpiresAt && (
+                              <PaymentCountdown expiresAt={String(order.paymentExpiresAt)} />
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {createdAt.toLocaleDateString("fr-FR", {
@@ -98,12 +164,25 @@ export default function OrdersPage() {
                             {total.toLocaleString("fr-FR")} F CFA
                           </p>
                         </div>
-                        <Link href={`/orders/${order.id}`}>
-                          <Button variant="outline" size="sm" data-testid={`button-view-order-${order.id}`}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            Voir détails
-                          </Button>
-                        </Link>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {order.status === "pending_payment" && order.paymentExpiresAt && new Date(order.paymentExpiresAt) > new Date() && (
+                            <Button
+                              size="sm"
+                              onClick={() => continuePaymentMutation.mutate(order.id)}
+                              disabled={continuePaymentMutation.isPending}
+                              data-testid={`button-continue-payment-${order.id}`}
+                            >
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              {continuePaymentMutation.isPending ? "Chargement..." : "Continuer le paiement"}
+                            </Button>
+                          )}
+                          <Link href={`/orders/${order.id}`}>
+                            <Button variant="outline" size="sm" data-testid={`button-view-order-${order.id}`}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Voir détails
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
 
                       {order.items.length > 0 && (
