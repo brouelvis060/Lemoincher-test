@@ -49,6 +49,7 @@ export default function AdminCategories() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string>("");
+  const [uploaderKey, setUploaderKey] = useState(0);
 
   const { data: categories, isLoading } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
@@ -73,6 +74,7 @@ export default function AdminCategories() {
     });
     setEditingCategory(null);
     setImageUrl("");
+    setUploaderKey(prev => prev + 1);
   };
 
   const openEditDialog = (category: Category) => {
@@ -84,6 +86,7 @@ export default function AdminCategories() {
       isActive: category.isActive ?? true,
     });
     setImageUrl(category.image || "");
+    setUploaderKey(prev => prev + 1);
     setShowDialog(true);
   };
 
@@ -263,6 +266,7 @@ export default function AdminCategories() {
                       <div className="border-2 border-dashed rounded-lg p-6 text-center">
                         <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <ObjectUploader
+                          key={uploaderKey}
                           maxNumberOfFiles={1}
                           maxFileSize={5 * 1024 * 1024}
                           onGetUploadParameters={handleGetUploadParameters}
