@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
 import { useSiteSettings } from "@/lib/site-settings";
@@ -78,8 +77,6 @@ export function ClientHeader() {
         </div>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
-
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative" data-testid="button-cart">
               <ShoppingCart className="h-5 w-5" />

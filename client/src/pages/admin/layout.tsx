@@ -1,7 +1,6 @@
 import { useLocation, Redirect } from "wouter";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/admin/sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/lib/auth";
 
 interface AdminLayoutProps {
@@ -34,9 +33,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       <div className="flex h-screen w-full">
         <AdminSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-2 p-4 border-b bg-background">
+          <header className="flex items-center gap-2 p-4 border-b bg-background">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
           </header>
           <main className="flex-1 overflow-auto">
             {children}
