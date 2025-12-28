@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Search, Eye, MoreHorizontal, Trash2, Plus, X, Package, MapPin, CreditCard, User, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Eye, MoreHorizontal, Trash2, Plus, X, Package, MapPin, CreditCard, User, RotateCcw, ChevronLeft, ChevronRight, Clock, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,91 @@ const orderStatuses = [
 
 const ORDERS_PER_PAGE = 10;
 
+function PaymentCountdownCard({ 
+  order, 
+  onCancelAndKeep, 
+  onCancelOrder, 
+  isPending 
+}: { 
+  order: OrderWithDetails;
+  onCancelAndKeep: () => void;
+  onCancelOrder: () => void;
+  isPending: boolean;
+}) {
+  const [timeLeft, setTimeLeft] = useState(0);
+  
+  useEffect(() => {
+    if (!order.paymentExpiresAt) return;
+    
+    const calculateTimeLeft = () => {
+      const expiresAt = new Date(String(order.paymentExpiresAt)).getTime();
+      const now = Date.now();
+      return Math.max(0, Math.floor((expiresAt - now) / 1000));
+    };
+    
+    setTimeLeft(calculateTimeLeft());
+    
+    const interval = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [order.paymentExpiresAt]);
+  
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const isExpired = timeLeft <= 0;
+  
+  return (
+    <Card className={isExpired ? "border-destructive bg-destructive/10" : "border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20"}>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className={`h-5 w-5 ${isExpired ? "text-destructive" : "text-orange-600 dark:text-orange-400"}`} />
+          <h3 className="font-medium">Décompte de paiement CinetPay</h3>
+        </div>
+        
+        {isExpired ? (
+          <p className="text-sm text-destructive mb-4">
+            Le délai de paiement a expiré. La commande sera automatiquement annulée.
+          </p>
+        ) : (
+          <div className="mb-4">
+            <p className={`text-2xl font-bold ${isExpired ? "text-destructive" : "text-orange-600 dark:text-orange-400"}`}>
+              {minutes.toString().padStart(2, "0")}:{seconds.toString().padStart(2, "0")}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Temps restant pour le paiement
+            </p>
+          </div>
+        )}
+        
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCancelAndKeep}
+            disabled={isPending}
+            data-testid="button-cancel-countdown-keep"
+          >
+            <StopCircle className="h-4 w-4 mr-2" />
+            Arrêter le décompte
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onCancelOrder}
+            disabled={isPending}
+            data-testid="button-cancel-countdown-order"
+          >
+            <X className="h-4 w-4 mr-2" />
+            Annuler la commande
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminOrders() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("orders");
@@ -120,6 +205,55 @@ export default function AdminOrders() {
       toast({
         title: "Erreur",
         description: "Impossible de modifier le statut",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const cancelCountdownMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await apiRequest("PATCH", `/api/orders/${orderId}`, { 
+        paymentExpiresAt: null,
+        status: "cancelled" 
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
+      setDetailOrder(data);
+      toast({
+        title: "Décompte annulé",
+        description: "Le décompte de paiement a été annulé et la commande a été annulée",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible d'annuler le décompte",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const keepOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await apiRequest("PATCH", `/api/orders/${orderId}`, { 
+        paymentExpiresAt: null 
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
+      setDetailOrder(data);
+      toast({
+        title: "Décompte annulé",
+        description: "Le décompte a été annulé. La commande reste en attente de paiement.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible d'annuler le décompte",
         variant: "destructive",
       });
     },
@@ -537,7 +671,12 @@ export default function AdminOrders() {
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                <OrderStatusBadge status={order.status} />
+                                <div className="flex items-center gap-2">
+                                  <OrderStatusBadge status={order.status} />
+                                  {order.status === "pending_payment" && order.paymentExpiresAt && new Date(String(order.paymentExpiresAt)) > new Date() && (
+                                    <Clock className="h-4 w-4 text-orange-500 animate-pulse" />
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <DropdownMenu>
@@ -881,6 +1020,15 @@ export default function AdminOrders() {
                   </div>
                   <OrderStatusBadge status={detailOrder.status} />
                 </div>
+
+                {detailOrder.status === "pending_payment" && detailOrder.paymentExpiresAt && (
+                  <PaymentCountdownCard 
+                    order={detailOrder}
+                    onCancelAndKeep={() => keepOrderMutation.mutate(detailOrder.id)}
+                    onCancelOrder={() => cancelCountdownMutation.mutate(detailOrder.id)}
+                    isPending={keepOrderMutation.isPending || cancelCountdownMutation.isPending}
+                  />
+                )}
 
                 <Separator />
 
