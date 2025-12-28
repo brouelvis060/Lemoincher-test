@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
@@ -50,10 +51,18 @@ export function AdminSidebar() {
   const [location, navigate] = useLocation();
   const { logout } = useAuth();
   const { settings } = useSiteSettings();
+  const { setOpenMobile, isMobile } = useSidebar();
   
   const siteName = settings?.siteName || "Lemoincher";
 
+  const handleMenuClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   const handleLogout = () => {
+    handleMenuClick();
     logout();
     navigate("/");
   };
@@ -84,7 +93,7 @@ export function AdminSidebar() {
                     isActive={location === item.url}
                     data-testid={`link-admin-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} onClick={handleMenuClick}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -106,7 +115,7 @@ export function AdminSidebar() {
                     isActive={location === item.url}
                     data-testid={`link-admin-settings-${item.title.toLowerCase()}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} onClick={handleMenuClick}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -120,7 +129,7 @@ export function AdminSidebar() {
 
       <SidebarFooter className="p-4">
         <div className="flex flex-col gap-2">
-          <Link href="/">
+          <Link href="/" onClick={handleMenuClick}>
             <Button variant="outline" className="w-full justify-start" size="sm">
               <Store className="h-4 w-4 mr-2" />
               Voir la boutique
