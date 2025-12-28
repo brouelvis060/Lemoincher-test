@@ -7,6 +7,7 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "client"]);
 export const orderStatusEnum = pgEnum("order_status", ["pending", "confirmed", "shipped", "at_station", "delivered", "cancelled"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["mobile_money", "cash_on_delivery"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "completed", "failed", "refunded"]);
+export const productTypeEnum = pgEnum("product_type", ["simple", "variable"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -40,6 +41,7 @@ export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
+  productType: productTypeEnum("product_type").default("simple").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   stock: integer("stock").default(0),
   weight: decimal("weight", { precision: 10, scale: 2 }).default("0"),
@@ -47,6 +49,17 @@ export const products = pgTable("products", {
   categoryId: varchar("category_id").references(() => categories.id),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const productVariations = pgTable("product_variations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  name: text("name").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  stock: integer("stock").default(0),
+  weight: decimal("weight", { precision: 10, scale: 2 }).default("0"),
+  image: text("image"),
+  isActive: boolean("is_active").default(true),
 });
 
 export const addresses = pgTable("addresses", {
@@ -176,8 +189,16 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     fields: [products.categoryId],
     references: [categories.id],
   }),
+  variations: many(productVariations),
   orderItems: many(orderItems),
   cartItems: many(cartItems),
+}));
+
+export const productVariationsRelations = relations(productVariations, ({ one }) => ({
+  product: one(products, {
+    fields: [productVariations.productId],
+    references: [products.id],
+  }),
 }));
 
 export const addressesRelations = relations(addresses, ({ one }) => ({
@@ -243,6 +264,7 @@ export const insertSmsSettingsSchema = createInsertSchema(smsSettings).omit({ id
 export const insertShippingRuleSchema = createInsertSchema(shippingRules).omit({ id: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertMediaFileSchema = createInsertSchema(mediaFiles).omit({ id: true, createdAt: true });
+export const insertProductVariationSchema = createInsertSchema(productVariations).omit({ id: true });
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -271,9 +293,11 @@ export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
 export type InsertMediaFile = z.infer<typeof insertMediaFileSchema>;
 export type MediaFile = typeof mediaFiles.$inferSelect;
+export type InsertProductVariation = z.infer<typeof insertProductVariationSchema>;
+export type ProductVariation = typeof productVariations.$inferSelect;
 
 // Extended types for frontend
-export type ProductWithCategory = Product & { category?: Category };
+export type ProductWithCategory = Product & { category?: Category; variations?: ProductVariation[] };
 export type OrderWithDetails = Order & { 
   items: (OrderItem & { product?: Product })[];
   address?: Address;

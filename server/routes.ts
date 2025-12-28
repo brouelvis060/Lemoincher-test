@@ -216,6 +216,56 @@ export async function registerRoutes(
     }
   });
 
+  // Product Variations routes
+  app.get("/api/products/:productId/variations", async (req, res) => {
+    try {
+      const variations = await storage.getProductVariations(req.params.productId);
+      res.json(variations);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/products/:productId/variations", async (req, res) => {
+    try {
+      const variation = await storage.createProductVariation({
+        ...req.body,
+        productId: req.params.productId
+      });
+      res.json(variation);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.patch("/api/variations/:id", async (req, res) => {
+    try {
+      const variation = await storage.updateProductVariation(req.params.id, req.body);
+      if (!variation) return res.status(404).json({ message: "Variation non trouvée" });
+      res.json(variation);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.delete("/api/variations/:id", async (req, res) => {
+    try {
+      await storage.deleteProductVariation(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.delete("/api/products/:productId/variations", async (req, res) => {
+    try {
+      await storage.deleteProductVariations(req.params.productId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Addresses routes
   app.get("/api/addresses", async (req, res) => {
     try {

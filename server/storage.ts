@@ -1,13 +1,13 @@
 import { 
   users, categories, products, addresses, orders, orderItems, 
-  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles,
+  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles, productVariations,
   type User, type InsertUser, type Category, type InsertCategory,
   type Product, type InsertProduct, type Address, type InsertAddress,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type Payment, type InsertPayment, type SiteSettings, type InsertSiteSettings,
   type PaymentSettings, type InsertPaymentSettings, type SmsSettings, type InsertSmsSettings,
   type ShippingRule, type InsertShippingRule, type CartItem, type InsertCartItem,
-  type MediaFile, type InsertMediaFile,
+  type MediaFile, type InsertMediaFile, type ProductVariation, type InsertProductVariation,
   type ProductWithCategory, type OrderWithDetails, type CartItemWithProduct
 } from "@shared/schema";
 import { db } from "./db";
@@ -88,6 +88,13 @@ export interface IStorage {
   getMediaFile(id: string): Promise<MediaFile | undefined>;
   createMediaFile(file: InsertMediaFile): Promise<MediaFile>;
   deleteMediaFile(id: string): Promise<boolean>;
+
+  // Product Variations
+  getProductVariations(productId: string): Promise<ProductVariation[]>;
+  createProductVariation(variation: InsertProductVariation): Promise<ProductVariation>;
+  updateProductVariation(id: string, data: Partial<InsertProductVariation>): Promise<ProductVariation | undefined>;
+  deleteProductVariation(id: string): Promise<boolean>;
+  deleteProductVariations(productId: string): Promise<boolean>;
 
   // Stats
   getDashboardStats(): Promise<{
@@ -179,7 +186,9 @@ export class DatabaseStorage implements IStorage {
       category = await this.getCategory(product.categoryId);
     }
     
-    return { ...product, category };
+    const variations = await this.getProductVariations(id);
+    
+    return { ...product, category, variations };
   }
 
   async getProductsByCategory(categoryId: string): Promise<ProductWithCategory[]> {
@@ -492,6 +501,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMediaFile(id: string): Promise<boolean> {
     await db.delete(mediaFiles).where(eq(mediaFiles.id, id));
+    return true;
+  }
+
+  // Product Variations
+  async getProductVariations(productId: string): Promise<ProductVariation[]> {
+    return await db.select().from(productVariations).where(eq(productVariations.productId, productId));
+  }
+
+  async createProductVariation(variation: InsertProductVariation): Promise<ProductVariation> {
+    const [result] = await db.insert(productVariations).values(variation).returning();
+    return result;
+  }
+
+  async updateProductVariation(id: string, data: Partial<InsertProductVariation>): Promise<ProductVariation | undefined> {
+    const [result] = await db.update(productVariations).set(data).where(eq(productVariations.id, id)).returning();
+    return result || undefined;
+  }
+
+  async deleteProductVariation(id: string): Promise<boolean> {
+    await db.delete(productVariations).where(eq(productVariations.id, id));
+    return true;
+  }
+
+  async deleteProductVariations(productId: string): Promise<boolean> {
+    await db.delete(productVariations).where(eq(productVariations.productId, productId));
     return true;
   }
 
