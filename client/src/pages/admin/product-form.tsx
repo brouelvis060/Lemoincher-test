@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, Image } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { ProductWithCategory, Category } from "@shared/schema";
@@ -24,7 +25,7 @@ const productSchema = z.object({
   stock: z.coerce.number().min(0, "Stock invalide"),
   weight: z.string().optional(),
   categoryId: z.string().optional(),
-  images: z.string().optional(),
+  images: z.array(z.string()).optional(),
   isActive: z.boolean(),
 });
 
@@ -36,6 +37,7 @@ export default function AdminProductForm() {
   const { toast } = useToast();
   const isEditing = params?.id && params.id !== "new";
   const productId = isEditing ? params.id : null;
+  const [uploaderKey, setUploaderKey] = useState(0);
 
   const { data: product, isLoading: productLoading } = useQuery<ProductWithCategory>({
     queryKey: ["/api/products", productId],
@@ -55,7 +57,7 @@ export default function AdminProductForm() {
       stock: 0,
       weight: "",
       categoryId: "",
-      images: "",
+      images: [],
       isActive: true,
     },
   });
@@ -69,18 +71,44 @@ export default function AdminProductForm() {
         stock: product.stock || 0,
         weight: product.weight || "",
         categoryId: product.categoryId || "",
-        images: product.images?.join("\n") || "",
+        images: product.images || [],
         isActive: product.isActive ?? true,
       });
     }
   }, [product, form]);
 
+  const handleGetUploadParameters = async (file: any) => {
+    const response = await fetch("/api/uploads/request-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to get upload URL");
+    }
+
+    const data = await response.json();
+    file.meta = { ...file.meta, objectPath: data.objectPath };
+
+    return {
+      method: "PUT" as const,
+      url: data.uploadURL,
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+    };
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (data: ProductForm) => {
-      const images = data.images?.split("\n").filter(url => url.trim()) || [];
       const payload = {
         ...data,
-        images,
+        images: data.images || [],
         categoryId: data.categoryId || null,
       };
 
@@ -185,17 +213,75 @@ export default function AdminProductForm() {
                     name="images"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Images (URLs)</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Collez les URLs des images, une par ligne"
-                            className="min-h-20"
-                            {...field}
-                            data-testid="input-images"
-                          />
-                        </FormControl>
+                        <FormLabel>Images du produit</FormLabel>
+                        <div className="space-y-3">
+                          {field.value && field.value.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {field.value.map((img, index) => (
+                                <div key={index} className="relative group">
+                                  <img
+                                    src={img}
+                                    alt={`Image ${index + 1}`}
+                                    className="w-full h-24 object-cover rounded-lg border"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="destructive"
+                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => {
+                                      const newImages = field.value?.filter((_, i) => i !== index) || [];
+                                      field.onChange(newImages);
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                            <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                            <ObjectUploader
+                              key={uploaderKey}
+                              maxNumberOfFiles={5}
+                              maxFileSize={5 * 1024 * 1024}
+                              onGetUploadParameters={handleGetUploadParameters}
+                              onComplete={async (result) => {
+                                if (result.successful && result.successful.length > 0) {
+                                  const newUrls: string[] = [];
+                                  for (const file of result.successful) {
+                                    const objectPath = file.meta?.objectPath;
+                                    if (objectPath) {
+                                      const fullUrl = `${window.location.origin}${objectPath}`;
+                                      newUrls.push(fullUrl);
+                                      
+                                      // Register in media library
+                                      await apiRequest("POST", "/api/media", {
+                                        name: file.name,
+                                        originalName: file.name,
+                                        mimeType: file.type || "image/jpeg",
+                                        size: file.size,
+                                        objectPath: objectPath,
+                                        url: fullUrl,
+                                      });
+                                    }
+                                  }
+                                  field.onChange([...(field.value || []), ...newUrls]);
+                                  queryClient.invalidateQueries({ queryKey: ["/api/media"] });
+                                  setUploaderKey(prev => prev + 1);
+                                  toast({ title: `${newUrls.length} image(s) téléchargée(s)` });
+                                }
+                              }}
+                              buttonClassName="mt-2"
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              Télécharger des images
+                            </ObjectUploader>
+                          </div>
+                        </div>
                         <FormDescription>
-                          Ajoutez une URL d'image par ligne
+                          Vous pouvez ajouter jusqu'à 5 images par téléchargement
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
