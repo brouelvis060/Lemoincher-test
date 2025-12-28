@@ -27,7 +27,6 @@ const addressSchema = z.object({
   fullAddress: z.string().min(5, "Adresse complète requise"),
   city: z.string().min(2, "Ville requise"),
   zone: z.string().optional(),
-  isAbidjan: z.boolean(),
 });
 
 type AddressForm = z.infer<typeof addressSchema>;
@@ -116,15 +115,16 @@ export default function CheckoutPage() {
       fullAddress: "",
       city: "",
       zone: "",
-      isAbidjan: false,
     },
   });
 
   const createAddressMutation = useMutation({
     mutationFn: async (data: AddressForm) => {
       const isFirstAddress = !addresses || addresses.length === 0;
+      const isAbidjan = data.city.toLowerCase().includes("abidjan");
       const response = await apiRequest("POST", "/api/addresses", {
         ...data,
+        isAbidjan,
         userId: user?.id,
         isDefault: isFirstAddress,
       });
@@ -431,22 +431,6 @@ export default function CheckoutPage() {
                               )}
                             />
                           </div>
-
-                          <FormField
-                            control={addressForm.control}
-                            name="isAbidjan"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center space-x-2">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                                <FormLabel className="!mt-0">Cette adresse est à Abidjan</FormLabel>
-                              </FormItem>
-                            )}
-                          />
 
                           <div className="flex gap-2">
                             <Button type="submit" disabled={createAddressMutation.isPending}>
