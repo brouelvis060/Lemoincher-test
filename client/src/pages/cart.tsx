@@ -6,37 +6,9 @@ import { Separator } from "@/components/ui/separator";
 import { ClientHeader } from "@/components/client/header";
 import { ClientFooter } from "@/components/client/footer";
 import { useCart } from "@/lib/cart";
-import { useAuth } from "@/lib/auth";
 
 export default function CartPage() {
   const { items, isLoading, updateQuantity, removeFromCart, subtotal, totalWeight } = useCart();
-  const { user } = useAuth();
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <ClientHeader />
-        <main className="flex-1 container px-4 py-8">
-          <Card className="max-w-md mx-auto p-8 text-center">
-            <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Connectez-vous</h2>
-            <p className="text-muted-foreground mb-6">
-              Veuillez vous connecter pour voir votre panier
-            </p>
-            <div className="flex flex-col gap-2">
-              <Link href="/login">
-                <Button className="w-full">Se connecter</Button>
-              </Link>
-              <Link href="/register">
-                <Button variant="outline" className="w-full">Créer un compte</Button>
-              </Link>
-            </div>
-          </Card>
-        </main>
-        <ClientFooter />
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
