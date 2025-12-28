@@ -1,12 +1,13 @@
 import { 
   users, categories, products, addresses, orders, orderItems, 
-  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems,
+  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles,
   type User, type InsertUser, type Category, type InsertCategory,
   type Product, type InsertProduct, type Address, type InsertAddress,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type Payment, type InsertPayment, type SiteSettings, type InsertSiteSettings,
   type PaymentSettings, type InsertPaymentSettings, type SmsSettings, type InsertSmsSettings,
   type ShippingRule, type InsertShippingRule, type CartItem, type InsertCartItem,
+  type MediaFile, type InsertMediaFile,
   type ProductWithCategory, type OrderWithDetails, type CartItemWithProduct
 } from "@shared/schema";
 import { db } from "./db";
@@ -81,6 +82,12 @@ export interface IStorage {
   updateCartItem(id: string, quantity: number): Promise<CartItem | undefined>;
   removeFromCart(id: string): Promise<boolean>;
   clearCart(userId: string): Promise<boolean>;
+
+  // Media Files
+  getMediaFiles(): Promise<MediaFile[]>;
+  getMediaFile(id: string): Promise<MediaFile | undefined>;
+  createMediaFile(file: InsertMediaFile): Promise<MediaFile>;
+  deleteMediaFile(id: string): Promise<boolean>;
 
   // Stats
   getDashboardStats(): Promise<{
@@ -465,6 +472,26 @@ export class DatabaseStorage implements IStorage {
 
   async clearCart(userId: string): Promise<boolean> {
     await db.delete(cartItems).where(eq(cartItems.userId, userId));
+    return true;
+  }
+
+  // Media Files
+  async getMediaFiles(): Promise<MediaFile[]> {
+    return await db.select().from(mediaFiles).orderBy(desc(mediaFiles.createdAt));
+  }
+
+  async getMediaFile(id: string): Promise<MediaFile | undefined> {
+    const [file] = await db.select().from(mediaFiles).where(eq(mediaFiles.id, id));
+    return file || undefined;
+  }
+
+  async createMediaFile(file: InsertMediaFile): Promise<MediaFile> {
+    const [result] = await db.insert(mediaFiles).values(file).returning();
+    return result;
+  }
+
+  async deleteMediaFile(id: string): Promise<boolean> {
+    await db.delete(mediaFiles).where(eq(mediaFiles.id, id));
     return true;
   }
 

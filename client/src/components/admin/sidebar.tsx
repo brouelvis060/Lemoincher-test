@@ -24,6 +24,7 @@ import {
   FolderTree,
   LogOut,
   Store,
+  Image,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +36,7 @@ const mainMenuItems = [
   { title: "Catégories", url: "/admin/categories", icon: FolderTree },
   { title: "Commandes", url: "/admin/orders", icon: ShoppingCart },
   { title: "Clients", url: "/admin/users", icon: Users },
+  { title: "Médiathèque", url: "/admin/media", icon: Image },
 ];
 
 const settingsMenuItems = [

@@ -142,6 +142,17 @@ export const shippingRules = pgTable("shipping_rules", {
   isActive: boolean("is_active").default(true),
 });
 
+export const mediaFiles = pgTable("media_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  objectPath: text("object_path").notNull(),
+  url: text("url").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const cartItems = pgTable("cart_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id).notNull(),
@@ -231,6 +242,7 @@ export const insertPaymentSettingsSchema = createInsertSchema(paymentSettings).o
 export const insertSmsSettingsSchema = createInsertSchema(smsSettings).omit({ id: true });
 export const insertShippingRuleSchema = createInsertSchema(shippingRules).omit({ id: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
+export const insertMediaFileSchema = createInsertSchema(mediaFiles).omit({ id: true, createdAt: true });
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -257,6 +269,8 @@ export type InsertShippingRule = z.infer<typeof insertShippingRuleSchema>;
 export type ShippingRule = typeof shippingRules.$inferSelect;
 export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
+export type InsertMediaFile = z.infer<typeof insertMediaFileSchema>;
+export type MediaFile = typeof mediaFiles.$inferSelect;
 
 // Extended types for frontend
 export type ProductWithCategory = Product & { category?: Category };

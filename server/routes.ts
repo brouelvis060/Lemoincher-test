@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 const scryptAsync = promisify(scrypt);
 
@@ -31,6 +32,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // Register object storage routes for file uploads
+  registerObjectStorageRoutes(app);
 
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
@@ -518,6 +522,35 @@ export async function registerRoutes(
     try {
       const stats = await storage.getDashboardStats();
       res.json(stats);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Media files routes
+  app.get("/api/media", async (req, res) => {
+    try {
+      const files = await storage.getMediaFiles();
+      res.json(files);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/media", async (req, res) => {
+    try {
+      const file = await storage.createMediaFile(req.body);
+      res.json(file);
+    } catch (error) {
+      console.error("Create media error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.delete("/api/media/:id", async (req, res) => {
+    try {
+      await storage.deleteMediaFile(req.params.id);
+      res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
     }
