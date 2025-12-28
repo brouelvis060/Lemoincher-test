@@ -367,13 +367,19 @@ export async function registerRoutes(
 
   app.post("/api/products/:productId/variations", async (req, res) => {
     try {
-      const variation = await storage.createProductVariation({
+      const variationData = {
         ...req.body,
-        productId: req.params.productId
-      });
+        productId: req.params.productId,
+        attributeValues: req.body.attributeValues || "",
+        price: req.body.price?.toString() || "0",
+        stock: parseInt(req.body.stock) || 0,
+        weight: req.body.weight?.toString() || "0",
+      };
+      const variation = await storage.createProductVariation(variationData);
       res.json(variation);
     } catch (error) {
-      res.status(500).json({ message: "Erreur serveur" });
+      console.error("Error creating variation:", error);
+      res.status(500).json({ message: "Erreur serveur", error: String(error) });
     }
   });
 
