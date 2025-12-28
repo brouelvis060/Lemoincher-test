@@ -103,18 +103,17 @@ export function ProductCard({ product }: ProductCardProps) {
           size="sm"
           onClick={handleAddToCart}
           disabled={isOutOfStock}
-          variant={isVariable ? "outline" : "default"}
           data-testid={`button-add-cart-${product.id}`}
         >
           {isVariable ? (
             <>
               <Settings2 className="h-4 w-4 mr-1" />
-              Options
+              Choix des options
             </>
           ) : (
             <>
               <ShoppingCart className="h-4 w-4 mr-1" />
-              Ajouter
+              Ajouter au panier
             </>
           )}
         </Button>

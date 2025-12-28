@@ -5,7 +5,7 @@ import { useAuth } from "./auth";
 interface CartContextType {
   items: CartItemWithProduct[];
   isLoading: boolean;
-  addToCart: (product: Product, quantity?: number) => Promise<void>;
+  addToCart: (product: Product, quantity?: number, variationId?: number) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -46,7 +46,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     fetchCart();
   }, [user?.id]);
 
-  const addToCart = async (product: Product, quantity = 1) => {
+  const addToCart = async (product: Product, quantity = 1, variationId?: number) => {
     if (!user) return;
     
     try {
@@ -57,6 +57,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           userId: user.id,
           productId: product.id,
           quantity,
+          variationId,
         }),
       });
       
