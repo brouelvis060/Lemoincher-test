@@ -51,6 +51,22 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Global attributes (like WooCommerce - created separately, then selected in products)
+export const attributes = pgTable("attributes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  isActive: boolean("is_active").default(true),
+});
+
+export const attributeValues = pgTable("attribute_values", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  attributeId: varchar("attribute_id").references(() => attributes.id).notNull(),
+  value: text("value").notNull(),
+  slug: text("slug").notNull(),
+});
+
+// Legacy table - keeping for migration compatibility but no longer used
 export const productAttributes = pgTable("product_attributes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   productId: varchar("product_id").references(() => products.id).notNull(),
@@ -210,6 +226,17 @@ export const productAttributesRelations = relations(productAttributes, ({ one })
   }),
 }));
 
+export const attributesRelations = relations(attributes, ({ many }) => ({
+  values: many(attributeValues),
+}));
+
+export const attributeValuesRelations = relations(attributeValues, ({ one }) => ({
+  attribute: one(attributes, {
+    fields: [attributeValues.attributeId],
+    references: [attributes.id],
+  }),
+}));
+
 export const productVariationsRelations = relations(productVariations, ({ one }) => ({
   product: one(products, {
     fields: [productVariations.productId],
@@ -280,6 +307,8 @@ export const insertSmsSettingsSchema = createInsertSchema(smsSettings).omit({ id
 export const insertShippingRuleSchema = createInsertSchema(shippingRules).omit({ id: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertMediaFileSchema = createInsertSchema(mediaFiles).omit({ id: true, createdAt: true });
+export const insertAttributeSchema = createInsertSchema(attributes).omit({ id: true });
+export const insertAttributeValueSchema = createInsertSchema(attributeValues).omit({ id: true });
 export const insertProductAttributeSchema = createInsertSchema(productAttributes).omit({ id: true });
 export const insertProductVariationSchema = createInsertSchema(productVariations).omit({ id: true });
 
@@ -310,12 +339,17 @@ export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
 export type InsertMediaFile = z.infer<typeof insertMediaFileSchema>;
 export type MediaFile = typeof mediaFiles.$inferSelect;
+export type InsertAttribute = z.infer<typeof insertAttributeSchema>;
+export type Attribute = typeof attributes.$inferSelect;
+export type InsertAttributeValue = z.infer<typeof insertAttributeValueSchema>;
+export type AttributeValue = typeof attributeValues.$inferSelect;
 export type InsertProductAttribute = z.infer<typeof insertProductAttributeSchema>;
 export type ProductAttribute = typeof productAttributes.$inferSelect;
 export type InsertProductVariation = z.infer<typeof insertProductVariationSchema>;
 export type ProductVariation = typeof productVariations.$inferSelect;
 
 // Extended types for frontend
+export type AttributeWithValues = Attribute & { values: AttributeValue[] };
 export type ProductWithCategory = Product & { category?: Category; attributes?: ProductAttribute[]; variations?: ProductVariation[] };
 export type OrderWithDetails = Order & { 
   items: (OrderItem & { product?: Product })[];

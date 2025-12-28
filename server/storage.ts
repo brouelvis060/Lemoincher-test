@@ -1,13 +1,16 @@
 import { 
   users, categories, products, addresses, orders, orderItems, 
-  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles, productAttributes, productVariations,
+  payments, siteSettings, paymentSettings, smsSettings, shippingRules, cartItems, mediaFiles, 
+  attributes, attributeValues, productAttributes, productVariations,
   type User, type InsertUser, type Category, type InsertCategory,
   type Product, type InsertProduct, type Address, type InsertAddress,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type Payment, type InsertPayment, type SiteSettings, type InsertSiteSettings,
   type PaymentSettings, type InsertPaymentSettings, type SmsSettings, type InsertSmsSettings,
   type ShippingRule, type InsertShippingRule, type CartItem, type InsertCartItem,
-  type MediaFile, type InsertMediaFile, type ProductAttribute, type InsertProductAttribute,
+  type MediaFile, type InsertMediaFile, 
+  type Attribute, type InsertAttribute, type AttributeValue, type InsertAttributeValue,
+  type AttributeWithValues, type ProductAttribute, type InsertProductAttribute,
   type ProductVariation, type InsertProductVariation,
   type ProductWithCategory, type OrderWithDetails, type CartItemWithProduct
 } from "@shared/schema";
@@ -90,7 +93,21 @@ export interface IStorage {
   createMediaFile(file: InsertMediaFile): Promise<MediaFile>;
   deleteMediaFile(id: string): Promise<boolean>;
 
-  // Product Attributes
+  // Global Attributes (WooCommerce-style)
+  getAttributes(): Promise<AttributeWithValues[]>;
+  getAttribute(id: string): Promise<AttributeWithValues | undefined>;
+  createAttribute(attribute: InsertAttribute): Promise<Attribute>;
+  updateAttribute(id: string, data: Partial<InsertAttribute>): Promise<Attribute | undefined>;
+  deleteAttribute(id: string): Promise<boolean>;
+  
+  // Attribute Values
+  getAttributeValues(attributeId: string): Promise<AttributeValue[]>;
+  createAttributeValue(value: InsertAttributeValue): Promise<AttributeValue>;
+  updateAttributeValue(id: string, data: Partial<InsertAttributeValue>): Promise<AttributeValue | undefined>;
+  deleteAttributeValue(id: string): Promise<boolean>;
+  deleteAttributeValuesByAttribute(attributeId: string): Promise<boolean>;
+
+  // Product Attributes (legacy)
   getProductAttributes(productId: string): Promise<ProductAttribute[]>;
   createProductAttribute(attribute: InsertProductAttribute): Promise<ProductAttribute>;
   updateProductAttribute(id: string, data: Partial<InsertProductAttribute>): Promise<ProductAttribute | undefined>;
@@ -512,7 +529,68 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  // Product Attributes
+  // Global Attributes (WooCommerce-style)
+  async getAttributes(): Promise<AttributeWithValues[]> {
+    const allAttributes = await db.select().from(attributes);
+    const allValues = await db.select().from(attributeValues);
+    
+    return allAttributes.map(attr => ({
+      ...attr,
+      values: allValues.filter(v => v.attributeId === attr.id),
+    }));
+  }
+
+  async getAttribute(id: string): Promise<AttributeWithValues | undefined> {
+    const [attr] = await db.select().from(attributes).where(eq(attributes.id, id));
+    if (!attr) return undefined;
+    
+    const values = await db.select().from(attributeValues).where(eq(attributeValues.attributeId, id));
+    return { ...attr, values };
+  }
+
+  async createAttribute(attribute: InsertAttribute): Promise<Attribute> {
+    const [result] = await db.insert(attributes).values(attribute).returning();
+    return result;
+  }
+
+  async updateAttribute(id: string, data: Partial<InsertAttribute>): Promise<Attribute | undefined> {
+    const [result] = await db.update(attributes).set(data).where(eq(attributes.id, id)).returning();
+    return result || undefined;
+  }
+
+  async deleteAttribute(id: string): Promise<boolean> {
+    // First delete all values for this attribute
+    await db.delete(attributeValues).where(eq(attributeValues.attributeId, id));
+    await db.delete(attributes).where(eq(attributes.id, id));
+    return true;
+  }
+
+  // Attribute Values
+  async getAttributeValues(attributeId: string): Promise<AttributeValue[]> {
+    return await db.select().from(attributeValues).where(eq(attributeValues.attributeId, attributeId));
+  }
+
+  async createAttributeValue(value: InsertAttributeValue): Promise<AttributeValue> {
+    const [result] = await db.insert(attributeValues).values(value).returning();
+    return result;
+  }
+
+  async updateAttributeValue(id: string, data: Partial<InsertAttributeValue>): Promise<AttributeValue | undefined> {
+    const [result] = await db.update(attributeValues).set(data).where(eq(attributeValues.id, id)).returning();
+    return result || undefined;
+  }
+
+  async deleteAttributeValue(id: string): Promise<boolean> {
+    await db.delete(attributeValues).where(eq(attributeValues.id, id));
+    return true;
+  }
+
+  async deleteAttributeValuesByAttribute(attributeId: string): Promise<boolean> {
+    await db.delete(attributeValues).where(eq(attributeValues.attributeId, attributeId));
+    return true;
+  }
+
+  // Product Attributes (legacy)
   async getProductAttributes(productId: string): Promise<ProductAttribute[]> {
     return await db.select().from(productAttributes).where(eq(productAttributes.productId, productId));
   }

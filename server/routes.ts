@@ -158,6 +158,95 @@ export async function registerRoutes(
     }
   });
 
+  // Global Attributes routes (WooCommerce-style)
+  app.get("/api/global-attributes", async (req, res) => {
+    try {
+      const attributes = await storage.getAttributes();
+      res.json(attributes);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.get("/api/global-attributes/:id", async (req, res) => {
+    try {
+      const attribute = await storage.getAttribute(req.params.id);
+      if (!attribute) return res.status(404).json({ message: "Attribut non trouvé" });
+      res.json(attribute);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/global-attributes", async (req, res) => {
+    try {
+      const attribute = await storage.createAttribute(req.body);
+      res.json(attribute);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.patch("/api/global-attributes/:id", async (req, res) => {
+    try {
+      const attribute = await storage.updateAttribute(req.params.id, req.body);
+      if (!attribute) return res.status(404).json({ message: "Attribut non trouvé" });
+      res.json(attribute);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.delete("/api/global-attributes/:id", async (req, res) => {
+    try {
+      await storage.deleteAttribute(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Attribute Values routes
+  app.get("/api/global-attributes/:attributeId/values", async (req, res) => {
+    try {
+      const values = await storage.getAttributeValues(req.params.attributeId);
+      res.json(values);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/global-attributes/:attributeId/values", async (req, res) => {
+    try {
+      const value = await storage.createAttributeValue({
+        ...req.body,
+        attributeId: req.params.attributeId
+      });
+      res.json(value);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.patch("/api/attribute-values/:id", async (req, res) => {
+    try {
+      const value = await storage.updateAttributeValue(req.params.id, req.body);
+      if (!value) return res.status(404).json({ message: "Valeur non trouvée" });
+      res.json(value);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.delete("/api/attribute-values/:id", async (req, res) => {
+    try {
+      await storage.deleteAttributeValue(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Products routes
   app.get("/api/products", async (req, res) => {
     try {
