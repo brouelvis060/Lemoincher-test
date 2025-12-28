@@ -261,7 +261,7 @@ export default function AdminCategories() {
                               maxNumberOfFiles={1}
                               maxFileSize={5 * 1024 * 1024}
                               onGetUploadParameters={handleGetUploadParameters}
-                              onComplete={(result) => {
+                              onComplete={async (result) => {
                                 if (result.successful && result.successful.length > 0) {
                                   const file = result.successful[0];
                                   const objectPath = file.meta?.objectPath;
@@ -269,6 +269,18 @@ export default function AdminCategories() {
                                     const fullUrl = `${window.location.origin}${objectPath}`;
                                     field.onChange(fullUrl);
                                     setImageUrl(fullUrl);
+                                    
+                                    // Register in media library
+                                    await apiRequest("POST", "/api/media", {
+                                      name: file.name,
+                                      originalName: file.name,
+                                      mimeType: file.type || "image/jpeg",
+                                      size: file.size,
+                                      objectPath: objectPath,
+                                      url: fullUrl,
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/media"] });
+                                    
                                     toast({ title: "Image téléchargée" });
                                   }
                                 }
