@@ -44,10 +44,11 @@ function clearGuestCart() {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [items, setItems] = useState<CartItemWithProduct[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const prevUserIdRef = useRef<string | null>(null);
+  const initialLoadDone = useRef(false);
 
   const fetchCart = async () => {
     if (!user) {
@@ -61,6 +62,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         product: item.product,
       }));
       setItems(cartItems);
+      setIsLoading(false);
       return;
     }
     
@@ -105,14 +107,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
     await fetchCart();
   };
 
+  // Wait for auth to finish loading before loading cart
   useEffect(() => {
+    if (authLoading) return;
+    
+    // Initial load or user change
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      fetchCart();
+      prevUserIdRef.current = user?.id || null;
+      return;
+    }
+    
+    // User just logged in - transfer guest cart
     if (user && !prevUserIdRef.current) {
       transferGuestCartToServer();
-    } else {
+    } else if (user?.id !== prevUserIdRef.current) {
+      // User changed
       fetchCart();
     }
+    
     prevUserIdRef.current = user?.id || null;
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   const addToCart = async (product: Product, quantity = 1, variationId?: string) => {
     if (!user) {
