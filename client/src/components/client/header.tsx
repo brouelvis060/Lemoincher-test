@@ -42,12 +42,23 @@ export function ClientHeader() {
       <div className="container flex h-16 items-center justify-between gap-4 px-4">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Package className="h-5 w-5" />
-            </div>
-            <span className="text-xl font-bold hidden sm:inline-block" data-testid="text-logo">
-              {siteName}
-            </span>
+            {settings?.logo ? (
+              <img 
+                src={settings.logo} 
+                alt={siteName} 
+                className="h-9 w-auto max-w-[120px] object-contain"
+                data-testid="img-logo"
+              />
+            ) : (
+              <>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Package className="h-5 w-5" />
+                </div>
+                <span className="text-xl font-bold hidden sm:inline-block" data-testid="text-logo">
+                  {siteName}
+                </span>
+              </>
+            )}
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
