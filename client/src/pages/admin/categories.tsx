@@ -117,19 +117,6 @@ export default function AdminCategories() {
     };
   };
 
-  const handleUploadComplete = (result: any) => {
-    if (result.successful && result.successful.length > 0) {
-      const file = result.successful[0];
-      const objectPath = file.meta?.objectPath;
-      if (objectPath) {
-        const fullUrl = `${window.location.origin}${objectPath}`;
-        setImageUrl(fullUrl);
-        form.setValue("image", fullUrl);
-        toast({ title: "Image téléchargée" });
-      }
-    }
-  };
-
   const saveMutation = useMutation({
     mutationFn: async (data: CategoryForm) => {
       if (editingCategory) {
@@ -239,47 +226,65 @@ export default function AdminCategories() {
                   )}
                 />
 
-                <FormItem>
-                  <FormLabel>Image *</FormLabel>
-                  <div className="space-y-3">
-                    {imageUrl ? (
-                      <div className="relative">
-                        <img
-                          src={imageUrl}
-                          alt="Aperçu"
-                          className="w-full h-32 object-cover rounded-lg border"
-                        />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="destructive"
-                          className="absolute top-2 right-2 h-6 w-6"
-                          onClick={() => {
-                            setImageUrl("");
-                            form.setValue("image", "");
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Image</FormLabel>
+                      <div className="space-y-3">
+                        {field.value ? (
+                          <div className="relative">
+                            <img
+                              src={field.value}
+                              alt="Aperçu"
+                              className="w-full h-32 object-cover rounded-lg border"
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="destructive"
+                              className="absolute top-2 right-2 h-6 w-6"
+                              onClick={() => {
+                                field.onChange("");
+                                setImageUrl("");
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                            <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                            <ObjectUploader
+                              key={uploaderKey}
+                              maxNumberOfFiles={1}
+                              maxFileSize={5 * 1024 * 1024}
+                              onGetUploadParameters={handleGetUploadParameters}
+                              onComplete={(result) => {
+                                if (result.successful && result.successful.length > 0) {
+                                  const file = result.successful[0];
+                                  const objectPath = file.meta?.objectPath;
+                                  if (objectPath) {
+                                    const fullUrl = `${window.location.origin}${objectPath}`;
+                                    field.onChange(fullUrl);
+                                    setImageUrl(fullUrl);
+                                    toast({ title: "Image téléchargée" });
+                                  }
+                                }
+                              }}
+                              buttonClassName="mt-2"
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              Télécharger une image
+                            </ObjectUploader>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                        <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                        <ObjectUploader
-                          key={uploaderKey}
-                          maxNumberOfFiles={1}
-                          maxFileSize={5 * 1024 * 1024}
-                          onGetUploadParameters={handleGetUploadParameters}
-                          onComplete={handleUploadComplete}
-                          buttonClassName="mt-2"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Télécharger une image
-                        </ObjectUploader>
-                      </div>
-                    )}
-                  </div>
-                </FormItem>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
