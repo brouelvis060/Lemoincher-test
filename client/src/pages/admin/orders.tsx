@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Search, Eye, MoreHorizontal, Trash2, Plus, X, Package, MapPin, CreditCard, User, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,7 @@ export default function AdminOrders() {
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
-  const { data: paginatedData, isLoading } = useQuery<{ orders: OrderWithDetails[]; total: number }>({
+  const { data: paginatedData, isLoading, isFetching } = useQuery<{ orders: OrderWithDetails[]; total: number }>({
     queryKey: ["/api/orders/paginated", currentPage, ORDERS_PER_PAGE, searchQuery, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -93,6 +93,7 @@ export default function AdminOrders() {
       const response = await fetch(`/api/orders/paginated?${params}`);
       return response.json();
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: trashedOrders, isLoading: isLoadingTrash } = useQuery<OrderWithDetails[]>({
