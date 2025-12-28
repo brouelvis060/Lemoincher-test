@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Search, Eye, MoreHorizontal, Trash2, Plus, X, Package, MapPin, CreditCard, User } from "lucide-react";
+import { Search, Eye, MoreHorizontal, Trash2, Plus, X, Package, MapPin, CreditCard, User, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -62,20 +63,39 @@ const orderStatuses = [
   { value: "cancelled", label: "Annulée" },
 ];
 
+const ORDERS_PER_PAGE = 10;
+
 export default function AdminOrders() {
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("orders");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
+  const [bulkPermanentDeleteDialogOpen, setBulkPermanentDeleteDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
-  const { data: orders, isLoading } = useQuery<OrderWithDetails[]>({
-    queryKey: ["/api/orders"],
+  const { data: paginatedData, isLoading } = useQuery<{ orders: OrderWithDetails[]; total: number }>({
+    queryKey: ["/api/orders/paginated", currentPage, ORDERS_PER_PAGE],
+    queryFn: async () => {
+      const response = await fetch(`/api/orders/paginated?page=${currentPage}&limit=${ORDERS_PER_PAGE}`);
+      return response.json();
+    },
   });
+
+  const { data: trashedOrders, isLoading: isLoadingTrash } = useQuery<OrderWithDetails[]>({
+    queryKey: ["/api/orders/trash"],
+  });
+
+  const orders = paginatedData?.orders || [];
+  const totalOrders = paginatedData?.total || 0;
+  const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
@@ -83,7 +103,7 @@ export default function AdminOrders() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
       toast({
         title: "Statut mis à jour",
         description: "Le statut de la commande a été modifié",
@@ -98,16 +118,17 @@ export default function AdminOrders() {
     },
   });
 
-  const deleteOrderMutation = useMutation({
+  const softDeleteMutation = useMutation({
     mutationFn: async (orderId: string) => {
       const response = await apiRequest("DELETE", `/api/orders/${orderId}`);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/trash"] });
       toast({
-        title: "Commande supprimée",
-        description: "La commande a été supprimée avec succès",
+        title: "Commande déplacée vers la corbeille",
+        description: "La commande a été déplacée vers la corbeille",
       });
       setDeleteDialogOpen(false);
       setOrderToDelete(null);
@@ -121,16 +142,17 @@ export default function AdminOrders() {
     },
   });
 
-  const bulkDeleteMutation = useMutation({
+  const bulkSoftDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       const response = await apiRequest("POST", "/api/orders/bulk-delete", { ids });
       return response.json();
     },
     onSuccess: (_, ids) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/trash"] });
       toast({
-        title: "Commandes supprimées",
-        description: `${ids.length} commande(s) supprimée(s) avec succès`,
+        title: "Commandes déplacées vers la corbeille",
+        description: `${ids.length} commande(s) déplacée(s) vers la corbeille`,
       });
       setSelectedOrders([]);
       setBulkDeleteDialogOpen(false);
@@ -144,23 +166,123 @@ export default function AdminOrders() {
     },
   });
 
-  const filteredOrders = orders?.filter((order) => {
+  const restoreOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await apiRequest("POST", `/api/orders/${orderId}/restore`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/trash"] });
+      toast({
+        title: "Commande restaurée",
+        description: "La commande a été restaurée avec succès",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de restaurer la commande",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkRestoreMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const response = await apiRequest("POST", "/api/orders/bulk-restore", { ids });
+      return response.json();
+    },
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/paginated"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/trash"] });
+      toast({
+        title: "Commandes restaurées",
+        description: `${ids.length} commande(s) restaurée(s)`,
+      });
+      setSelectedOrders([]);
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de restaurer les commandes",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await apiRequest("DELETE", `/api/orders/${orderId}/permanent`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/trash"] });
+      toast({
+        title: "Commande supprimée définitivement",
+        description: "La commande a été supprimée de façon permanente",
+      });
+      setPermanentDeleteDialogOpen(false);
+      setOrderToDelete(null);
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer la commande",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkPermanentDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const response = await apiRequest("POST", "/api/orders/bulk-permanent-delete", { ids });
+      return response.json();
+    },
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/trash"] });
+      toast({
+        title: "Commandes supprimées définitivement",
+        description: `${ids.length} commande(s) supprimée(s) de façon permanente`,
+      });
+      setSelectedOrders([]);
+      setBulkPermanentDeleteDialogOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer les commandes",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const filteredOrders = orders.filter((order) => {
     const matchesSearch =
       order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.user?.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.user?.lastName?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
+  });
+
+  const filteredTrashedOrders = trashedOrders?.filter((order) => {
+    return (
+      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.user?.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.user?.lastName?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   }) || [];
 
-  const allSelected = filteredOrders.length > 0 && selectedOrders.length === filteredOrders.length;
-  const someSelected = selectedOrders.length > 0 && selectedOrders.length < filteredOrders.length;
+  const currentOrders = activeTab === "orders" ? filteredOrders : filteredTrashedOrders;
+  const allSelected = currentOrders.length > 0 && selectedOrders.length === currentOrders.length;
+  const someSelected = selectedOrders.length > 0 && selectedOrders.length < currentOrders.length;
 
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(filteredOrders.map(o => o.id));
+      setSelectedOrders(currentOrders.map(o => o.id));
     }
   };
 
@@ -182,16 +304,41 @@ export default function AdminOrders() {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const handlePermanentDeleteClick = (orderId: string) => {
+    setOrderToDelete(orderId);
+    setPermanentDeleteDialogOpen(true);
+  };
+
+  const confirmSoftDelete = () => {
     if (orderToDelete) {
-      deleteOrderMutation.mutate(orderToDelete);
+      softDeleteMutation.mutate(orderToDelete);
     }
   };
 
-  const confirmBulkDelete = () => {
+  const confirmBulkSoftDelete = () => {
     if (selectedOrders.length > 0) {
-      bulkDeleteMutation.mutate(selectedOrders);
+      bulkSoftDeleteMutation.mutate(selectedOrders);
     }
+  };
+
+  const confirmPermanentDelete = () => {
+    if (orderToDelete) {
+      permanentDeleteMutation.mutate(orderToDelete);
+    }
+  };
+
+  const confirmBulkPermanentDelete = () => {
+    if (selectedOrders.length > 0) {
+      bulkPermanentDeleteMutation.mutate(selectedOrders);
+    }
+  };
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setSelectedOrders([]);
+    setSearchQuery("");
+    setStatusFilter("all");
+    setCurrentPage(1);
   };
 
   return (
@@ -211,210 +358,416 @@ export default function AdminOrders() {
         </Link>
       </div>
 
-      {selectedOrders.length > 0 && (
-        <Card className="bg-muted/50">
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-sm font-medium">
-                {selectedOrders.length} commande{selectedOrders.length > 1 ? "s" : ""} sélectionnée{selectedOrders.length > 1 ? "s" : ""}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedOrders([])}
-                  data-testid="button-clear-selection"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Annuler
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setBulkDeleteDialogOpen(true)}
-                  data-testid="button-bulk-delete"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Supprimer ({selectedOrders.length})
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList>
+          <TabsTrigger value="orders" data-testid="tab-orders">
+            Commandes ({totalOrders})
+          </TabsTrigger>
+          <TabsTrigger value="trash" data-testid="tab-trash">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Corbeille ({trashedOrders?.length || 0})
+          </TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <CardTitle>{filteredOrders.length} commande{filteredOrders.length > 1 ? "s" : ""}</CardTitle>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                  data-testid="input-search"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-40" data-testid="select-status-filter">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  {orderStatuses.map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      {status.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : filteredOrders.length > 0 ? (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={allSelected}
-                        ref={(el) => {
-                          if (el) (el as any).indeterminate = someSelected;
-                        }}
-                        onCheckedChange={toggleSelectAll}
-                        data-testid="checkbox-select-all"
-                      />
-                    </TableHead>
-                    <TableHead>Commande</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Paiement</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredOrders.map((order) => {
-                    const createdAt = new Date(order.createdAt!);
-                    const isSelected = selectedOrders.includes(order.id);
-                    return (
-                      <TableRow 
-                        key={order.id} 
-                        data-testid={`row-order-${order.id}`}
-                        className={isSelected ? "bg-muted/50" : ""}
+        {selectedOrders.length > 0 && (
+          <Card className="bg-muted/50 mt-4">
+            <CardContent className="py-3">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium">
+                  {selectedOrders.length} commande{selectedOrders.length > 1 ? "s" : ""} sélectionnée{selectedOrders.length > 1 ? "s" : ""}
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedOrders([])}
+                    data-testid="button-clear-selection"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Annuler
+                  </Button>
+                  {activeTab === "orders" ? (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setBulkDeleteDialogOpen(true)}
+                      data-testid="button-bulk-delete"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Supprimer ({selectedOrders.length})
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => bulkRestoreMutation.mutate(selectedOrders)}
+                        disabled={bulkRestoreMutation.isPending}
+                        data-testid="button-bulk-restore"
                       >
-                        <TableCell>
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Restaurer ({selectedOrders.length})
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setBulkPermanentDeleteDialogOpen(true)}
+                        data-testid="button-bulk-permanent-delete"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Supprimer définitivement ({selectedOrders.length})
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <TabsContent value="orders" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <CardTitle>{filteredOrders.length} commande{filteredOrders.length > 1 ? "s" : ""}</CardTitle>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Rechercher..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-search"
+                    />
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-40" data-testid="select-status-filter">
+                      <SelectValue placeholder="Statut" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous</SelectItem>
+                      {orderStatuses.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : filteredOrders.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">
+                            <Checkbox
+                              checked={allSelected}
+                              ref={(el) => {
+                                if (el) (el as any).indeterminate = someSelected;
+                              }}
+                              onCheckedChange={toggleSelectAll}
+                              data-testid="checkbox-select-all"
+                            />
+                          </TableHead>
+                          <TableHead>Commande</TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Total</TableHead>
+                          <TableHead>Paiement</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredOrders.map((order) => {
+                          const createdAt = new Date(order.createdAt!);
+                          const isSelected = selectedOrders.includes(order.id);
+                          return (
+                            <TableRow 
+                              key={order.id} 
+                              data-testid={`row-order-${order.id}`}
+                              className={isSelected ? "bg-muted/50" : ""}
+                            >
+                              <TableCell>
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleSelectOrder(order.id)}
+                                  data-testid={`checkbox-order-${order.id}`}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                #{order.orderNumber}
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">
+                                    {order.user?.firstName} {order.user?.lastName}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {order.user?.email}
+                                  </p>
+                                  {order.user && <UserBadge user={order.user} />}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p>{createdAt.toLocaleDateString("fr-FR")}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {createdAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {parseFloat(order.total).toLocaleString("fr-FR")} F
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={order.paymentMethod === "mobile_money" ? "default" : "secondary"}>
+                                  {order.paymentMethod === "mobile_money" ? "Mobile Money" : "À la livraison"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <OrderStatusBadge status={order.status} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" data-testid={`button-actions-${order.id}`}>
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => handleViewDetails(order)}
+                                      data-testid={`button-view-${order.id}`}
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      Voir détails
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {orderStatuses.map((status) => (
+                                      <DropdownMenuItem
+                                        key={status.value}
+                                        onClick={() => updateStatusMutation.mutate({
+                                          orderId: order.id,
+                                          status: status.value,
+                                        })}
+                                        disabled={order.status === status.value}
+                                      >
+                                        {status.label}
+                                      </DropdownMenuItem>
+                                    ))}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => handleDeleteClick(order.id)}
+                                      className="text-destructive focus:text-destructive"
+                                      data-testid={`button-delete-${order.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Mettre à la corbeille
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                      <p className="text-sm text-muted-foreground">
+                        Page {currentPage} sur {totalPages} ({totalOrders} commandes)
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          data-testid="button-prev-page"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Précédent
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          data-testid="button-next-page"
+                        >
+                          Suivant
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">Aucune commande trouvée</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="trash" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="h-5 w-5" />
+                    Corbeille ({filteredTrashedOrders.length})
+                  </div>
+                </CardTitle>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                    data-testid="input-search-trash"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingTrash ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : filteredTrashedOrders.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
                           <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleSelectOrder(order.id)}
-                            data-testid={`checkbox-order-${order.id}`}
+                            checked={allSelected}
+                            ref={(el) => {
+                              if (el) (el as any).indeterminate = someSelected;
+                            }}
+                            onCheckedChange={toggleSelectAll}
+                            data-testid="checkbox-select-all-trash"
                           />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          #{order.orderNumber}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">
-                              {order.user?.firstName} {order.user?.lastName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {order.user?.email}
-                            </p>
-                            {order.user && <UserBadge user={order.user} />}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p>{createdAt.toLocaleDateString("fr-FR")}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {createdAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {parseFloat(order.total).toLocaleString("fr-FR")} F
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={order.paymentMethod === "mobile_money" ? "default" : "secondary"}>
-                            {order.paymentMethod === "mobile_money" ? "Mobile Money" : "À la livraison"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <OrderStatusBadge status={order.status} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" data-testid={`button-actions-${order.id}`}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleViewDetails(order)}
-                                data-testid={`button-view-${order.id}`}
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Voir détails
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {orderStatuses.map((status) => (
-                                <DropdownMenuItem
-                                  key={status.value}
-                                  onClick={() => updateStatusMutation.mutate({
-                                    orderId: order.id,
-                                    status: status.value,
-                                  })}
-                                  disabled={order.status === status.value}
-                                >
-                                  {status.label}
-                                </DropdownMenuItem>
-                              ))}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteClick(order.id)}
-                                className="text-destructive focus:text-destructive"
-                                data-testid={`button-delete-${order.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Supprimer
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                        </TableHead>
+                        <TableHead>Commande</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Supprimée le</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Aucune commande trouvée</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTrashedOrders.map((order) => {
+                        const deletedAt = order.deletedAt ? new Date(order.deletedAt) : null;
+                        const isSelected = selectedOrders.includes(order.id);
+                        return (
+                          <TableRow 
+                            key={order.id} 
+                            data-testid={`row-trash-order-${order.id}`}
+                            className={isSelected ? "bg-muted/50" : ""}
+                          >
+                            <TableCell>
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelectOrder(order.id)}
+                                data-testid={`checkbox-trash-order-${order.id}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              #{order.orderNumber}
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">
+                                  {order.user?.firstName} {order.user?.lastName}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {order.user?.email}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {deletedAt && (
+                                <div>
+                                  <p>{deletedAt.toLocaleDateString("fr-FR")}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {deletedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                  </p>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {parseFloat(order.total).toLocaleString("fr-FR")} F
+                            </TableCell>
+                            <TableCell>
+                              <OrderStatusBadge status={order.status} />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => restoreOrderMutation.mutate(order.id)}
+                                  disabled={restoreOrderMutation.isPending}
+                                  data-testid={`button-restore-${order.id}`}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Restaurer
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handlePermanentDeleteClick(order.id)}
+                                  data-testid={`button-permanent-delete-${order.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Trash2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">La corbeille est vide</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
+            <DialogTitle>Mettre à la corbeille</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible et supprimera également tous les articles et paiements associés.
+              Cette commande sera déplacée vers la corbeille. Vous pourrez la restaurer ou la supprimer définitivement plus tard.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -423,11 +776,11 @@ export default function AdminOrders() {
             </Button>
             <Button 
               variant="destructive" 
-              onClick={confirmDelete}
-              disabled={deleteOrderMutation.isPending}
+              onClick={confirmSoftDelete}
+              disabled={softDeleteMutation.isPending}
               data-testid="button-confirm-delete"
             >
-              {deleteOrderMutation.isPending ? "Suppression..." : "Supprimer"}
+              {softDeleteMutation.isPending ? "Suppression..." : "Mettre à la corbeille"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -436,9 +789,9 @@ export default function AdminOrders() {
       <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Supprimer {selectedOrders.length} commande{selectedOrders.length > 1 ? "s" : ""}</DialogTitle>
+            <DialogTitle>Mettre {selectedOrders.length} commande{selectedOrders.length > 1 ? "s" : ""} à la corbeille</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer ces commandes ? Cette action est irréversible et supprimera également tous les articles et paiements associés.
+              Ces commandes seront déplacées vers la corbeille. Vous pourrez les restaurer ou les supprimer définitivement plus tard.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -447,11 +800,59 @@ export default function AdminOrders() {
             </Button>
             <Button 
               variant="destructive" 
-              onClick={confirmBulkDelete}
-              disabled={bulkDeleteMutation.isPending}
+              onClick={confirmBulkSoftDelete}
+              disabled={bulkSoftDeleteMutation.isPending}
               data-testid="button-confirm-bulk-delete"
             >
-              {bulkDeleteMutation.isPending ? "Suppression..." : `Supprimer (${selectedOrders.length})`}
+              {bulkSoftDeleteMutation.isPending ? "Suppression..." : `Mettre à la corbeille (${selectedOrders.length})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={permanentDeleteDialogOpen} onOpenChange={setPermanentDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer définitivement</DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. La commande et toutes les données associées seront définitivement supprimées.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPermanentDeleteDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmPermanentDelete}
+              disabled={permanentDeleteMutation.isPending}
+              data-testid="button-confirm-permanent-delete"
+            >
+              {permanentDeleteMutation.isPending ? "Suppression..." : "Supprimer définitivement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkPermanentDeleteDialogOpen} onOpenChange={setBulkPermanentDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer définitivement {selectedOrders.length} commande{selectedOrders.length > 1 ? "s" : ""}</DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. Les commandes et toutes les données associées seront définitivement supprimées.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkPermanentDeleteDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmBulkPermanentDelete}
+              disabled={bulkPermanentDeleteMutation.isPending}
+              data-testid="button-confirm-bulk-permanent-delete"
+            >
+              {bulkPermanentDeleteMutation.isPending ? "Suppression..." : `Supprimer définitivement (${selectedOrders.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -559,7 +960,7 @@ export default function AdminOrders() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Livraison</span>
-                      <span>{parseFloat(detailOrder.shippingFee).toLocaleString("fr-FR")} F</span>
+                      <span>{parseFloat(detailOrder.shippingFee || "0").toLocaleString("fr-FR")} F</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-semibold">
@@ -568,13 +969,6 @@ export default function AdminOrders() {
                     </div>
                   </div>
                 </div>
-
-                {detailOrder.notes && (
-                  <div>
-                    <h3 className="font-medium mb-2">Notes</h3>
-                    <p className="text-sm bg-muted/50 rounded-md p-3">{detailOrder.notes}</p>
-                  </div>
-                )}
 
                 <div className="flex gap-2">
                   <Button 
