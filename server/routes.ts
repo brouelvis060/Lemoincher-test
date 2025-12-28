@@ -485,10 +485,12 @@ export async function registerRoutes(
       const { items, ...orderData } = req.body;
       const orderNumber = generateOrderNumber();
 
+      const initialStatus = orderData.paymentMethod === "mobile_money" ? "pending_payment" : "pending";
+
       const order = await storage.createOrder({
         ...orderData,
         orderNumber,
-        status: "pending",
+        status: initialStatus,
       });
 
       for (const item of items) {
@@ -797,25 +799,29 @@ export async function registerRoutes(
       const checkData = await checkResponse.json();
       console.log("CinetPay check response:", checkData);
 
-      if (checkData.code === "00" && checkData.data?.status === "ACCEPTED") {
-        const payments = await storage.getAllPayments();
-        const payment = payments.find(p => p.transactionId === cpm_trans_id);
-        
-        if (payment) {
-          await storage.updatePayment(payment.id, { status: "completed" });
-          await storage.updateOrder(payment.orderId, { status: "confirmed" });
-        }
+      const payments = await storage.getAllPayments();
+      const payment = payments.find(p => p.transactionId === cpm_trans_id);
+      
+      if (!payment) {
+        console.error("Payment not found for transaction:", cpm_trans_id);
+        return res.status(404).json({ message: "Paiement non trouvé" });
+      }
 
+      const transactionStatus = checkData.data?.status;
+
+      if (checkData.code === "00" && transactionStatus === "ACCEPTED") {
+        await storage.updatePayment(payment.id, { status: "completed" });
+        await storage.updateOrder(payment.orderId, { status: "pending" });
+        console.log(`Payment ${cpm_trans_id} accepted, order ${payment.orderId} set to pending`);
         res.json({ success: true });
+      } else if (transactionStatus === "REFUSED" || transactionStatus === "CANCELED") {
+        await storage.updatePayment(payment.id, { status: "failed" });
+        await storage.updateOrder(payment.orderId, { status: "cancelled" });
+        console.log(`Payment ${cpm_trans_id} ${transactionStatus}, order ${payment.orderId} cancelled`);
+        res.json({ success: false, reason: transactionStatus });
       } else {
-        const payments = await storage.getAllPayments();
-        const payment = payments.find(p => p.transactionId === cpm_trans_id);
-        
-        if (payment) {
-          await storage.updatePayment(payment.id, { status: "failed" });
-        }
-
-        res.json({ success: false });
+        console.log(`Payment ${cpm_trans_id} status: ${transactionStatus} - no action taken`);
+        res.json({ success: false, status: transactionStatus });
       }
     } catch (error) {
       console.error("CinetPay notify error:", error);

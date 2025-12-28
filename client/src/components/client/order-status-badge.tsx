@@ -1,14 +1,15 @@
 import { Badge } from "@/components/ui/badge";
-import { Package, Truck, Building, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Package, Truck, Building, CheckCircle, XCircle, Clock, CreditCard } from "lucide-react";
 
-type OrderStatus = "pending" | "confirmed" | "shipped" | "at_station" | "delivered" | "cancelled";
+type OrderStatus = "pending_payment" | "pending" | "confirmed" | "shipped" | "at_station" | "delivered" | "cancelled";
 
 interface OrderStatusBadgeProps {
   status: OrderStatus;
 }
 
 const statusConfig: Record<OrderStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Package }> = {
-  pending: { label: "En attente", variant: "secondary", icon: Clock },
+  pending_payment: { label: "En attente de paiement", variant: "outline", icon: CreditCard },
+  pending: { label: "Commande reçue", variant: "secondary", icon: Clock },
   confirmed: { label: "Confirmée", variant: "default", icon: CheckCircle },
   shipped: { label: "Expédiée", variant: "default", icon: Truck },
   at_station: { label: "À la gare", variant: "default", icon: Building },

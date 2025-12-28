@@ -36,7 +36,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { OrderWithDetails } from "@shared/schema";
 
 const orderStatuses = [
-  { value: "pending", label: "En attente" },
+  { value: "pending_payment", label: "En attente de paiement" },
+  { value: "pending", label: "Commande reçue" },
   { value: "confirmed", label: "Confirmée" },
   { value: "shipped", label: "Expédiée" },
   { value: "at_station", label: "À la gare" },
