@@ -45,7 +45,12 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: addresses, isLoading: addressesLoading } = useQuery<Address[]>({
-    queryKey: ["/api/addresses", user?.id],
+    queryKey: ["/api/addresses", { userId: user?.id }],
+    queryFn: async () => {
+      const res = await fetch(`/api/addresses?userId=${user?.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch addresses");
+      return res.json();
+    },
     enabled: !!user,
   });
 
@@ -92,14 +97,16 @@ export default function CheckoutPage() {
 
   const createAddressMutation = useMutation({
     mutationFn: async (data: AddressForm) => {
+      const isFirstAddress = !addresses || addresses.length === 0;
       const response = await apiRequest("POST", "/api/addresses", {
         ...data,
         userId: user?.id,
+        isDefault: isFirstAddress,
       });
       return response.json();
     },
     onSuccess: (newAddress) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/addresses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/addresses", { userId: user?.id }] });
       setSelectedAddress(newAddress.id);
       setShowAddressForm(false);
       addressForm.reset();

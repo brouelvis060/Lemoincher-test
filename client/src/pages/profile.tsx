@@ -49,7 +49,12 @@ export default function ProfilePage() {
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
 
   const { data: addresses, isLoading: addressesLoading } = useQuery<Address[]>({
-    queryKey: ["/api/addresses", user?.id],
+    queryKey: ["/api/addresses", { userId: user?.id }],
+    queryFn: async () => {
+      const res = await fetch(`/api/addresses?userId=${user?.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch addresses");
+      return res.json();
+    },
     enabled: !!user,
   });
 
@@ -98,14 +103,16 @@ export default function ProfilePage() {
 
   const createAddressMutation = useMutation({
     mutationFn: async (data: AddressFormData) => {
+      const isFirstAddress = !addresses || addresses.length === 0;
       const response = await apiRequest("POST", "/api/addresses", {
         ...data,
         userId: user?.id,
+        isDefault: isFirstAddress || data.isDefault,
       });
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/addresses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/addresses", { userId: user?.id }] });
       setShowAddressDialog(false);
       addressForm.reset();
       toast({
@@ -129,7 +136,7 @@ export default function ProfilePage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/addresses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/addresses", { userId: user?.id }] });
       setShowAddressDialog(false);
       setEditingAddress(null);
       addressForm.reset();
@@ -152,7 +159,7 @@ export default function ProfilePage() {
       await apiRequest("DELETE", `/api/addresses/${addressId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/addresses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/addresses", { userId: user?.id }] });
       toast({
         title: "Adresse supprimée",
         description: "L'adresse a été supprimée",
