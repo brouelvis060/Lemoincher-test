@@ -41,6 +41,9 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   const siteName = settings?.siteName || "Lemoincher";
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const redirectUrl = urlParams.get("redirect") || "/";
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -76,7 +79,7 @@ export default function RegisterPage() {
         title: "Inscription réussie",
         description: "Bienvenue sur Lemoincher !",
       });
-      navigate("/");
+      navigate(redirectUrl);
     } else {
       toast({
         title: "Erreur d'inscription",

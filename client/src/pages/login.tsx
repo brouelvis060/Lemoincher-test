@@ -28,6 +28,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   const siteName = settings?.siteName || "Lemoincher";
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const redirectUrl = urlParams.get("redirect") || "/";
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -47,7 +50,7 @@ export default function LoginPage() {
         title: "Connexion réussie",
         description: "Bienvenue sur Lemoincher !",
       });
-      navigate("/");
+      navigate(redirectUrl);
     } else {
       toast({
         title: "Erreur de connexion",

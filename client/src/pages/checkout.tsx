@@ -248,9 +248,14 @@ export default function CheckoutPage() {
             <p className="text-muted-foreground mb-6">
               Veuillez vous connecter pour finaliser votre commande
             </p>
-            <Link href="/login">
-              <Button className="w-full">Se connecter</Button>
-            </Link>
+            <div className="flex flex-col gap-2">
+              <Link href="/login?redirect=/checkout">
+                <Button className="w-full">Se connecter</Button>
+              </Link>
+              <Link href="/register?redirect=/checkout">
+                <Button variant="outline" className="w-full">Créer un compte</Button>
+              </Link>
+            </div>
           </Card>
         </main>
         <ClientFooter />
