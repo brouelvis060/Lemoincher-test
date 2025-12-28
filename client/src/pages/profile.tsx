@@ -122,6 +122,31 @@ export default function ProfilePage() {
     },
   });
 
+  const updateAddressMutation = useMutation({
+    mutationFn: async (data: AddressFormData & { id: string }) => {
+      const { id, ...addressData } = data;
+      const response = await apiRequest("PATCH", `/api/addresses/${id}`, addressData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/addresses"] });
+      setShowAddressDialog(false);
+      setEditingAddress(null);
+      addressForm.reset();
+      toast({
+        title: "Adresse modifiée",
+        description: "Votre adresse a été mise à jour",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier l'adresse",
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteAddressMutation = useMutation({
     mutationFn: async (addressId: string) => {
       await apiRequest("DELETE", `/api/addresses/${addressId}`);
@@ -141,6 +166,40 @@ export default function ProfilePage() {
       });
     },
   });
+
+  const openEditDialog = (address: Address) => {
+    setEditingAddress(address);
+    addressForm.reset({
+      label: address.label,
+      fullAddress: address.fullAddress,
+      city: address.city,
+      zone: address.zone || "",
+      isAbidjan: address.isAbidjan || false,
+      isDefault: address.isDefault || false,
+    });
+    setShowAddressDialog(true);
+  };
+
+  const openAddDialog = () => {
+    setEditingAddress(null);
+    addressForm.reset({
+      label: "",
+      fullAddress: "",
+      city: "",
+      zone: "",
+      isAbidjan: false,
+      isDefault: false,
+    });
+    setShowAddressDialog(true);
+  };
+
+  const handleAddressSubmit = (data: AddressFormData) => {
+    if (editingAddress) {
+      updateAddressMutation.mutate({ ...data, id: editingAddress.id });
+    } else {
+      createAddressMutation.mutate(data);
+    }
+  };
 
   if (!user) {
     return (
@@ -310,22 +369,25 @@ export default function ProfilePage() {
                           Gérez vos adresses de livraison
                         </CardDescription>
                       </div>
-                      <Dialog open={showAddressDialog} onOpenChange={setShowAddressDialog}>
+                      <Dialog open={showAddressDialog} onOpenChange={(open) => {
+                        setShowAddressDialog(open);
+                        if (!open) setEditingAddress(null);
+                      }}>
                         <DialogTrigger asChild>
-                          <Button size="sm">
+                          <Button size="sm" onClick={openAddDialog}>
                             <Plus className="h-4 w-4 mr-2" />
                             Ajouter
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
-                            <DialogTitle>Nouvelle adresse</DialogTitle>
+                            <DialogTitle>{editingAddress ? "Modifier l'adresse" : "Nouvelle adresse"}</DialogTitle>
                             <DialogDescription>
-                              Ajoutez une nouvelle adresse de livraison
+                              {editingAddress ? "Modifiez les informations de cette adresse" : "Ajoutez une nouvelle adresse de livraison"}
                             </DialogDescription>
                           </DialogHeader>
                           <Form {...addressForm}>
-                            <form onSubmit={addressForm.handleSubmit((data) => createAddressMutation.mutate(data))} className="space-y-4">
+                            <form onSubmit={addressForm.handleSubmit(handleAddressSubmit)} className="space-y-4">
                               <FormField
                                 control={addressForm.control}
                                 name="label"
@@ -420,8 +482,11 @@ export default function ProfilePage() {
                                 <Button type="button" variant="outline" onClick={() => setShowAddressDialog(false)}>
                                   Annuler
                                 </Button>
-                                <Button type="submit" disabled={createAddressMutation.isPending}>
-                                  {createAddressMutation.isPending ? "Ajout..." : "Ajouter"}
+                                <Button type="submit" disabled={createAddressMutation.isPending || updateAddressMutation.isPending}>
+                                  {editingAddress 
+                                    ? (updateAddressMutation.isPending ? "Modification..." : "Modifier")
+                                    : (createAddressMutation.isPending ? "Ajout..." : "Ajouter")
+                                  }
                                 </Button>
                               </div>
                             </form>
@@ -450,14 +515,25 @@ export default function ProfilePage() {
                                   {address.zone && ` - ${address.zone}`}
                                 </p>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => deleteAddressMutation.mutate(address.id)}
-                                disabled={deleteAddressMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditDialog(address)}
+                                  data-testid={`button-edit-address-${address.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteAddressMutation.mutate(address.id)}
+                                  disabled={deleteAddressMutation.isPending}
+                                  data-testid={`button-delete-address-${address.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>

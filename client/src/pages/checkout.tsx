@@ -68,6 +68,17 @@ export default function CheckoutPage() {
     }
   }, [canUseCashOnDelivery, paymentMethod]);
 
+  useEffect(() => {
+    if (addresses && addresses.length > 0 && !selectedAddress) {
+      const defaultAddress = addresses.find(a => a.isDefault);
+      if (defaultAddress) {
+        setSelectedAddress(defaultAddress.id);
+      } else {
+        setSelectedAddress(addresses[0].id);
+      }
+    }
+  }, [addresses, selectedAddress]);
+
   const addressForm = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
