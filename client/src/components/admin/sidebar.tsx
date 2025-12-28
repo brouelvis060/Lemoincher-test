@@ -73,11 +73,20 @@ export function AdminSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <Link href="/admin" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Store className="h-5 w-5" />
-          </div>
+          {settings?.logo ? (
+            <img 
+              src={settings.logo} 
+              alt={siteName} 
+              className="h-9 w-auto max-w-[120px] object-contain"
+              data-testid="img-admin-logo"
+            />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Store className="h-5 w-5" />
+            </div>
+          )}
           <div>
-            <span className="font-bold text-lg">{siteName}</span>
+            {!settings?.logo && <span className="font-bold text-lg">{siteName}</span>}
             <p className="text-xs text-muted-foreground">Administration</p>
           </div>
         </Link>

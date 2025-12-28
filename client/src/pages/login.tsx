@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useSiteSettings } from "@/lib/site-settings";
 
 const loginSchema = z.object({
   email: z.string().email("Email invalide"),
@@ -22,8 +23,11 @@ export default function LoginPage() {
   const [, navigate] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
+  const { settings } = useSiteSettings();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const siteName = settings?.siteName || "Lemoincher";
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -58,10 +62,21 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Link href="/" className="inline-flex items-center justify-center gap-2 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Package className="h-6 w-6" />
-            </div>
-            <span className="text-2xl font-bold">Lemoincher</span>
+            {settings?.logo ? (
+              <img 
+                src={settings.logo} 
+                alt={siteName} 
+                className="h-10 w-auto max-w-[150px] object-contain"
+                data-testid="img-login-logo"
+              />
+            ) : (
+              <>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Package className="h-6 w-6" />
+                </div>
+                <span className="text-2xl font-bold">{siteName}</span>
+              </>
+            )}
           </Link>
           <CardTitle>Connexion</CardTitle>
           <CardDescription>
