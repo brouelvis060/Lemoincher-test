@@ -131,11 +131,45 @@ export default function CheckoutPage() {
     },
     onSuccess: async (order) => {
       await clearCart();
-      toast({
-        title: "Commande créée",
-        description: `Votre commande ${order.orderNumber} a été enregistrée`,
-      });
-      navigate(`/orders/${order.id}`);
+      
+      if (paymentMethod === "mobile_money") {
+        try {
+          const paymentResponse = await apiRequest("POST", "/api/payments/cinetpay/init", {
+            orderId: order.id,
+          });
+          const paymentData = await paymentResponse.json();
+          
+          if (paymentData.success && paymentData.paymentUrl) {
+            toast({
+              title: "Redirection vers le paiement",
+              description: "Vous allez être redirigé vers la page de paiement",
+            });
+            window.location.href = paymentData.paymentUrl;
+            return;
+          } else {
+            toast({
+              title: "Erreur de paiement",
+              description: paymentData.message || "Impossible d'initialiser le paiement",
+              variant: "destructive",
+            });
+            navigate(`/orders/${order.id}`);
+          }
+        } catch (error) {
+          console.error("Payment init error:", error);
+          toast({
+            title: "Erreur",
+            description: "Erreur lors de l'initialisation du paiement",
+            variant: "destructive",
+          });
+          navigate(`/orders/${order.id}`);
+        }
+      } else {
+        toast({
+          title: "Commande créée",
+          description: `Votre commande ${order.orderNumber} a été enregistrée`,
+        });
+        navigate(`/orders/${order.id}`);
+      }
     },
     onError: () => {
       toast({

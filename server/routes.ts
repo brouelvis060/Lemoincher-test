@@ -694,6 +694,178 @@ export async function registerRoutes(
     }
   });
 
+  // CinetPay payment endpoints
+  app.post("/api/payments/cinetpay/init", async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Commande non trouvée" });
+      }
+
+      const paymentSettings = await storage.getPaymentSettings();
+      if (!paymentSettings?.cinetpayApiKey || !paymentSettings?.cinetpaySiteId) {
+        return res.status(400).json({ message: "Configuration CinetPay manquante" });
+      }
+
+      const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      
+      const payload = {
+        apikey: paymentSettings.cinetpayApiKey,
+        site_id: paymentSettings.cinetpaySiteId,
+        transaction_id: transactionId,
+        amount: Math.round(parseFloat(order.total)),
+        currency: "XOF",
+        description: `Commande ${order.orderNumber}`,
+        notify_url: `${baseUrl}/api/payments/cinetpay/notify`,
+        return_url: `${baseUrl}/orders/${orderId}?payment=success`,
+        cancel_url: `${baseUrl}/orders/${orderId}?payment=cancelled`,
+        channels: "ALL",
+        metadata: JSON.stringify({ orderId, orderNumber: order.orderNumber }),
+        customer_name: order.user?.firstName || "Client",
+        customer_surname: order.user?.lastName || "",
+        customer_email: order.user?.email || "",
+        customer_phone_number: order.user?.phone || "",
+        customer_address: order.address?.fullAddress || "",
+        customer_city: order.address?.city || "",
+        customer_country: "CI",
+      };
+
+      const response = await fetch("https://api-checkout.cinetpay.com/v2/payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.code === "201" && data.data?.payment_url) {
+        const payment = await storage.getPaymentByOrder(orderId);
+        if (payment) {
+          await storage.updatePayment(payment.id, {
+            transactionId,
+            cinetpayReference: data.data.payment_token,
+          });
+        }
+
+        res.json({
+          success: true,
+          paymentUrl: data.data.payment_url,
+          transactionId,
+        });
+      } else {
+        console.error("CinetPay init error:", data);
+        res.status(400).json({
+          success: false,
+          message: data.message || "Erreur lors de l'initialisation du paiement",
+        });
+      }
+    } catch (error) {
+      console.error("CinetPay init error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/payments/cinetpay/notify", async (req, res) => {
+    try {
+      console.log("CinetPay notification received:", req.body);
+      const { cpm_trans_id, cpm_site_id, cpm_trans_status } = req.body;
+
+      const paymentSettings = await storage.getPaymentSettings();
+      
+      if (!paymentSettings?.cinetpayApiKey || !paymentSettings?.cinetpaySiteId) {
+        return res.status(400).json({ message: "Configuration CinetPay manquante" });
+      }
+
+      const checkPayload = {
+        apikey: paymentSettings.cinetpayApiKey,
+        site_id: paymentSettings.cinetpaySiteId,
+        transaction_id: cpm_trans_id,
+      };
+
+      const checkResponse = await fetch("https://api-checkout.cinetpay.com/v2/payment/check", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(checkPayload),
+      });
+
+      const checkData = await checkResponse.json();
+      console.log("CinetPay check response:", checkData);
+
+      if (checkData.code === "00" && checkData.data?.status === "ACCEPTED") {
+        const payments = await storage.getAllPayments();
+        const payment = payments.find(p => p.transactionId === cpm_trans_id);
+        
+        if (payment) {
+          await storage.updatePayment(payment.id, { status: "completed" });
+          await storage.updateOrder(payment.orderId, { status: "confirmed" });
+        }
+
+        res.json({ success: true });
+      } else {
+        const payments = await storage.getAllPayments();
+        const payment = payments.find(p => p.transactionId === cpm_trans_id);
+        
+        if (payment) {
+          await storage.updatePayment(payment.id, { status: "failed" });
+        }
+
+        res.json({ success: false });
+      }
+    } catch (error) {
+      console.error("CinetPay notify error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/payments/cinetpay/check", async (req, res) => {
+    try {
+      const { orderId } = req.body;
+      const payment = await storage.getPaymentByOrder(orderId);
+      
+      if (!payment || !payment.transactionId) {
+        return res.status(404).json({ message: "Paiement non trouvé" });
+      }
+
+      const paymentSettings = await storage.getPaymentSettings();
+      if (!paymentSettings?.cinetpayApiKey || !paymentSettings?.cinetpaySiteId) {
+        return res.status(400).json({ message: "Configuration CinetPay manquante" });
+      }
+
+      const checkPayload = {
+        apikey: paymentSettings.cinetpayApiKey,
+        site_id: paymentSettings.cinetpaySiteId,
+        transaction_id: payment.transactionId,
+      };
+
+      const checkResponse = await fetch("https://api-checkout.cinetpay.com/v2/payment/check", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(checkPayload),
+      });
+
+      const checkData = await checkResponse.json();
+
+      if (checkData.code === "00" && checkData.data?.status === "ACCEPTED") {
+        await storage.updatePayment(payment.id, { status: "completed" });
+        await storage.updateOrder(orderId, { status: "confirmed" });
+        res.json({ status: "completed", data: checkData.data });
+      } else {
+        res.json({ status: payment.status, data: checkData.data });
+      }
+    } catch (error) {
+      console.error("CinetPay check error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.get("/api/settings/sms", async (req, res) => {
     try {
       const settings = await storage.getSmsSettings();
