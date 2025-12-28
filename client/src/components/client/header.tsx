@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, User, Menu, X, Package, LogOut, Home, Grid3X3, Phone, Trash2, Minus, Plus } from "lucide-react";
+import { ShoppingCart, User, Menu, X, Package, LogOut, Home, Grid3X3, Phone, Trash2, Minus, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Popover,
@@ -36,12 +37,21 @@ export function ClientHeader() {
   const { settings } = useSiteSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   
   const siteName = settings?.siteName || "Lemoincher";
 
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+    }
   };
 
   return (
@@ -83,6 +93,20 @@ export function ClientHeader() {
             ))}
           </nav>
         </div>
+
+        <form onSubmit={handleSearch} className="hidden sm:flex flex-1 max-w-md mx-4">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Rechercher un produit..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4"
+              data-testid="input-search"
+            />
+          </div>
+        </form>
 
         <div className="flex items-center gap-2">
           <Popover open={cartOpen} onOpenChange={setCartOpen}>
@@ -277,7 +301,20 @@ export function ClientHeader() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
-              <nav className="flex flex-col gap-2 mt-8">
+              <form onSubmit={(e) => { handleSearch(e); setMobileMenuOpen(false); }} className="mt-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Rechercher..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-4"
+                    data-testid="input-search-mobile"
+                  />
+                </div>
+              </form>
+              <nav className="flex flex-col gap-2 mt-4">
                 {navLinks.map((link) => (
                   <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)}>
                     <Button

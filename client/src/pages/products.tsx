@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { Search, Filter, X } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,10 +23,17 @@ export default function ProductsPage() {
   const searchParams = useSearch();
   const urlParams = new URLSearchParams(searchParams);
   const initialCategory = urlParams.get("category") || "";
+  const initialSearch = urlParams.get("search") || "";
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState("newest");
+
+  useEffect(() => {
+    if (initialSearch) {
+      setSearchQuery(initialSearch);
+    }
+  }, [initialSearch]);
 
   const { data: products, isLoading: productsLoading } = useQuery<ProductWithCategory[]>({
     queryKey: ["/api/products", "active"],
