@@ -74,7 +74,7 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
       onMouseLeave={() => setIsPaused(false)}
       data-testid="banner-carousel"
     >
-      <div className="relative aspect-[16/5] md:aspect-[16/4] lg:aspect-[16/3.5]">
+      <div className="relative w-full" style={{ paddingBottom: 'clamp(200px, 35vw, 500px)' }}>
         {banners.map((banner, index) => (
           <div
             key={index}
@@ -87,7 +87,7 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
                 <img
                   src={banner.image}
                   alt={banner.title || `Bannière ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain sm:object-cover object-center"
                   data-testid={`img-banner-${index}`}
                 />
               </Link>
@@ -95,7 +95,7 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
               <img
                 src={banner.image}
                 alt={banner.title || `Bannière ${index + 1}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain sm:object-cover object-center"
                 data-testid={`img-banner-${index}`}
               />
             )}
