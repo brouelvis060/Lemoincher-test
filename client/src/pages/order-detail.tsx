@@ -68,6 +68,27 @@ export default function OrderDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  // Handle payment return from CinetPay
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get("payment");
+    
+    if (paymentStatus === "cancelled") {
+      toast({
+        title: "Paiement interrompu",
+        description: "Vous pouvez reprendre le paiement à tout moment dans les 30 minutes.",
+      });
+      // Clean URL
+      window.history.replaceState({}, "", `/orders/${orderId}`);
+    } else if (paymentStatus === "success") {
+      toast({
+        title: "Paiement en cours de traitement",
+        description: "Veuillez patienter pendant la confirmation du paiement.",
+      });
+      window.history.replaceState({}, "", `/orders/${orderId}`);
+    }
+  }, [orderId, toast]);
+
   const { data: order, isLoading } = useQuery<OrderWithDetails>({
     queryKey: ["/api/orders", orderId],
     enabled: !!orderId,
