@@ -139,6 +139,7 @@ export default function CheckoutPage() {
         title: "Adresse ajoutée",
         description: "Votre nouvelle adresse a été enregistrée",
       });
+      setStep(2);
     },
     onError: () => {
       toast({
@@ -337,7 +338,7 @@ export default function CheckoutPage() {
                         <Skeleton className="h-20 w-full" />
                         <Skeleton className="h-20 w-full" />
                       </div>
-                    ) : addresses && addresses.length > 0 ? (
+                    ) : addresses && addresses.length > 0 && (
                       <RadioGroup value={selectedAddress} onValueChange={setSelectedAddress}>
                         {addresses.map((address) => (
                           <label
@@ -365,15 +366,11 @@ export default function CheckoutPage() {
                           </label>
                         ))}
                       </RadioGroup>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-4">
-                        Aucune adresse enregistrée
-                      </p>
                     )}
 
-                    {showAddressForm ? (
+                    {(showAddressForm || (!addresses || addresses.length === 0)) ? (
                       <Form {...addressForm}>
-                        <form onSubmit={addressForm.handleSubmit((data) => createAddressMutation.mutate(data))} className="space-y-4 border-t pt-4">
+                        <form onSubmit={addressForm.handleSubmit((data) => createAddressMutation.mutate(data))} className={`space-y-4 ${addresses && addresses.length > 0 ? "border-t pt-4" : ""}`}>
                           <FormField
                             control={addressForm.control}
                             name="label"
@@ -432,13 +429,15 @@ export default function CheckoutPage() {
                             />
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <Button type="submit" disabled={createAddressMutation.isPending}>
-                              {createAddressMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                              {createAddressMutation.isPending ? "Enregistrement..." : "Enregistrer et continuer"}
                             </Button>
-                            <Button type="button" variant="outline" onClick={() => setShowAddressForm(false)}>
-                              Annuler
-                            </Button>
+                            {addresses && addresses.length > 0 && (
+                              <Button type="button" variant="outline" onClick={() => setShowAddressForm(false)}>
+                                Annuler
+                              </Button>
+                            )}
                           </div>
                         </form>
                       </Form>
@@ -449,11 +448,13 @@ export default function CheckoutPage() {
                       </Button>
                     )}
 
-                    <div className="flex justify-end">
-                      <Button onClick={() => setStep(2)} disabled={!selectedAddress}>
-                        Continuer
-                      </Button>
-                    </div>
+                    {addresses && addresses.length > 0 && selectedAddress && !showAddressForm && (
+                      <div className="flex justify-end">
+                        <Button onClick={() => setStep(2)}>
+                          Continuer
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
