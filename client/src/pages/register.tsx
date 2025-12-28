@@ -71,7 +71,7 @@ export default function RegisterPage() {
     if (result.success) {
       toast({
         title: "Inscription réussie",
-        description: "Bienvenue sur AfriShop !",
+        description: "Bienvenue sur Lemoincher !",
       });
       navigate("/");
     } else {
@@ -95,7 +95,7 @@ export default function RegisterPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Package className="h-6 w-6" />
             </div>
-            <span className="text-2xl font-bold">AfriShop</span>
+            <span className="text-2xl font-bold">Lemoincher</span>
           </Link>
           <CardTitle>Créer un compte</CardTitle>
           <CardDescription>

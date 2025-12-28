@@ -42,7 +42,7 @@ export function ClientHeader() {
               <Package className="h-5 w-5" />
             </div>
             <span className="text-xl font-bold hidden sm:inline-block" data-testid="text-logo">
-              AfriShop
+              Lemoincher
             </span>
           </Link>
 

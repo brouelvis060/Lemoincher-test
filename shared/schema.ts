@@ -101,7 +101,7 @@ export const payments = pgTable("payments", {
 
 export const siteSettings = pgTable("site_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  siteName: text("site_name").default("AfriShop"),
+  siteName: text("site_name").default("Lemoincher"),
   logo: text("logo"),
   primaryColor: text("primary_color").default("#D97706"),
   secondaryColor: text("secondary_color").default("#1F2937"),

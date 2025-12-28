@@ -39,7 +39,7 @@ export default function AdminSiteSettings() {
   const form = useForm<SiteSettingsForm>({
     resolver: zodResolver(siteSettingsSchema),
     defaultValues: {
-      siteName: "AfriShop",
+      siteName: "Lemoincher",
       logo: "",
       primaryColor: "#D97706",
       secondaryColor: "#1F2937",
@@ -55,7 +55,7 @@ export default function AdminSiteSettings() {
   useEffect(() => {
     if (settings) {
       form.reset({
-        siteName: settings.siteName || "AfriShop",
+        siteName: settings.siteName || "Lemoincher",
         logo: settings.logo || "",
         primaryColor: settings.primaryColor || "#D97706",
         secondaryColor: settings.secondaryColor || "#1F2937",

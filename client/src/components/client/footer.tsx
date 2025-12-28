@@ -11,7 +11,7 @@ export function ClientFooter() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Package className="h-5 w-5" />
               </div>
-              <span className="text-xl font-bold">AfriShop</span>
+              <span className="text-xl font-bold">Lemoincher</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Votre destination shopping en ligne en Afrique. Livraison rapide et paiement Mobile Money.
@@ -57,7 +57,7 @@ export function ClientFooter() {
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Mail className="h-4 w-4" />
-                <span>contact@afrishop.ci</span>
+                <span>infos@lemoincher.com</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4" />
@@ -69,7 +69,7 @@ export function ClientFooter() {
 
         <div className="mt-12 border-t pt-6">
           <p className="text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} AfriShop. Tous droits réservés.
+            © {new Date().getFullYear()} Lemoincher. Tous droits réservés.
           </p>
         </div>
       </div>
