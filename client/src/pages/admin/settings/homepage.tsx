@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, Save, GripVertical, Image, Link2, Upload } from "lucide-react";
+import { Plus, Trash2, Save, GripVertical, Image, Link2, Upload, Settings, Clock, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
@@ -17,9 +19,26 @@ interface Banner {
   title?: string;
 }
 
+interface CarouselSettings {
+  interval: number;
+  height: string;
+  autoPlay: boolean;
+  showArrows: boolean;
+  showDots: boolean;
+}
+
+const defaultCarouselSettings: CarouselSettings = {
+  interval: 5000,
+  height: "medium",
+  autoPlay: true,
+  showArrows: true,
+  showDots: true,
+};
+
 export default function AdminHomepageSettings() {
   const { toast } = useToast();
   const [banners, setBanners] = useState<Banner[]>([]);
+  const [carouselSettings, setCarouselSettings] = useState<CarouselSettings>(defaultCarouselSettings);
 
   const { data: settings, isLoading } = useQuery<SiteSettings>({
     queryKey: ["/api/settings/site"],
@@ -29,24 +48,27 @@ export default function AdminHomepageSettings() {
     if (settings?.homeBanners) {
       setBanners(settings.homeBanners as Banner[]);
     }
+    if (settings?.carouselSettings) {
+      setCarouselSettings({ ...defaultCarouselSettings, ...(settings.carouselSettings as CarouselSettings) });
+    }
   }, [settings]);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: { homeBanners: Banner[] }) => {
+    mutationFn: async (data: { homeBanners: Banner[]; carouselSettings: CarouselSettings }) => {
       const response = await apiRequest("PATCH", "/api/settings/site", data);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/site"] });
       toast({
-        title: "Bannières enregistrées",
-        description: "Les bannières de la page d'accueil ont été mises à jour",
+        title: "Paramètres enregistrés",
+        description: "Les paramètres de la page d'accueil ont été mis à jour",
       });
     },
     onError: () => {
       toast({
         title: "Erreur",
-        description: "Impossible d'enregistrer les bannières",
+        description: "Impossible d'enregistrer les paramètres",
         variant: "destructive",
       });
     },
@@ -76,7 +98,7 @@ export default function AdminHomepageSettings() {
 
   const handleSave = () => {
     const validBanners = banners.filter(b => b.image.trim() !== "");
-    saveMutation.mutate({ homeBanners: validBanners });
+    saveMutation.mutate({ homeBanners: validBanners, carouselSettings });
   };
 
   const handleGetUploadParameters = async (file: any) => {
@@ -137,6 +159,102 @@ export default function AdminHomepageSettings() {
           Gérez le carrousel de bannières affiché sur la page d'accueil
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Paramètres du carrousel
+          </CardTitle>
+          <CardDescription>
+            Configurez le comportement et l'apparence du carrousel de bannières
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="carousel-interval" className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Durée d'affichage (secondes)
+              </Label>
+              <Select
+                value={String(carouselSettings.interval / 1000)}
+                onValueChange={(value) => setCarouselSettings({ ...carouselSettings, interval: Number(value) * 1000 })}
+              >
+                <SelectTrigger id="carousel-interval" data-testid="select-carousel-interval">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">3 secondes</SelectItem>
+                  <SelectItem value="5">5 secondes</SelectItem>
+                  <SelectItem value="7">7 secondes</SelectItem>
+                  <SelectItem value="10">10 secondes</SelectItem>
+                  <SelectItem value="15">15 secondes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="carousel-height" className="flex items-center gap-2">
+                <Maximize2 className="h-4 w-4" />
+                Taille du carrousel
+              </Label>
+              <Select
+                value={carouselSettings.height}
+                onValueChange={(value) => setCarouselSettings({ ...carouselSettings, height: value })}
+              >
+                <SelectTrigger id="carousel-height" data-testid="select-carousel-height">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="small">Petit (250px)</SelectItem>
+                  <SelectItem value="medium">Moyen (400px)</SelectItem>
+                  <SelectItem value="large">Grand (500px)</SelectItem>
+                  <SelectItem value="xlarge">Très grand (600px)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Défilement automatique</Label>
+                <p className="text-sm text-muted-foreground">Les bannières défilent automatiquement</p>
+              </div>
+              <Switch
+                checked={carouselSettings.autoPlay}
+                onCheckedChange={(checked) => setCarouselSettings({ ...carouselSettings, autoPlay: checked })}
+                data-testid="switch-autoplay"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Afficher les flèches</Label>
+                <p className="text-sm text-muted-foreground">Flèches de navigation gauche/droite</p>
+              </div>
+              <Switch
+                checked={carouselSettings.showArrows}
+                onCheckedChange={(checked) => setCarouselSettings({ ...carouselSettings, showArrows: checked })}
+                data-testid="switch-arrows"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Afficher les indicateurs</Label>
+                <p className="text-sm text-muted-foreground">Points de navigation en bas</p>
+              </div>
+              <Switch
+                checked={carouselSettings.showDots}
+                onCheckedChange={(checked) => setCarouselSettings({ ...carouselSettings, showDots: checked })}
+                data-testid="switch-dots"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -275,7 +393,7 @@ export default function AdminHomepageSettings() {
         data-testid="button-save"
       >
         <Save className="h-4 w-4 mr-2" />
-        {saveMutation.isPending ? "Enregistrement..." : "Enregistrer les bannières"}
+        {saveMutation.isPending ? "Enregistrement..." : "Enregistrer les paramètres"}
       </Button>
     </div>
   );

@@ -151,6 +151,19 @@ export const siteSettings = pgTable("site_settings", {
   email: text("email"),
   address: text("address"),
   homeBanners: jsonb("home_banners").$type<Array<{ image: string; link?: string; title?: string }>>().default([]),
+  carouselSettings: jsonb("carousel_settings").$type<{
+    interval: number;
+    height: string;
+    autoPlay: boolean;
+    showArrows: boolean;
+    showDots: boolean;
+  }>().default({
+    interval: 5000,
+    height: "medium",
+    autoPlay: true,
+    showArrows: true,
+    showDots: true,
+  }),
 });
 
 export const paymentSettings = pgTable("payment_settings", {

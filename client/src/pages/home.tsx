@@ -17,6 +17,29 @@ interface Banner {
   title?: string;
 }
 
+interface CarouselSettings {
+  interval: number;
+  height: string;
+  autoPlay: boolean;
+  showArrows: boolean;
+  showDots: boolean;
+}
+
+const defaultCarouselSettings: CarouselSettings = {
+  interval: 5000,
+  height: "medium",
+  autoPlay: true,
+  showArrows: true,
+  showDots: true,
+};
+
+const heightMap: Record<string, string> = {
+  small: "250px",
+  medium: "400px",
+  large: "500px",
+  xlarge: "600px",
+};
+
 const features = [
   {
     icon: Truck,
@@ -40,7 +63,8 @@ const features = [
   },
 ];
 
-function BannerCarousel({ banners }: { banners: Banner[] }) {
+function BannerCarousel({ banners, settings: settingsProp }: { banners: Banner[]; settings?: CarouselSettings }) {
+  const settings = settingsProp || defaultCarouselSettings;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
@@ -53,19 +77,17 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
   }, [banners.length]);
 
   useEffect(() => {
-    if (banners.length <= 1 || isPaused) return;
+    if (banners.length <= 1 || isPaused || !settings.autoPlay) return;
     
-    const interval = setInterval(goToNext, 5000);
+    const interval = setInterval(goToNext, settings.interval);
     return () => clearInterval(interval);
-  }, [banners.length, isPaused, goToNext]);
+  }, [banners.length, isPaused, goToNext, settings.autoPlay, settings.interval]);
 
   if (banners.length === 0) {
     return null;
   }
 
-  const currentBanner = banners[currentIndex];
-  const BannerWrapper = currentBanner.link ? Link : "div";
-  const wrapperProps = currentBanner.link ? { href: currentBanner.link } : {};
+  const carouselHeight = heightMap[settings.height] || heightMap.medium;
 
   return (
     <section 
@@ -74,7 +96,10 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
       onMouseLeave={() => setIsPaused(false)}
       data-testid="banner-carousel"
     >
-      <div className="relative w-full" style={{ paddingBottom: 'clamp(200px, 35vw, 500px)' }}>
+      <div 
+        className="relative w-full" 
+        style={{ height: `clamp(200px, 40vw, ${carouselHeight})` }}
+      >
         {banners.map((banner, index) => (
           <div
             key={index}
@@ -103,12 +128,12 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
         ))}
       </div>
 
-      {banners.length > 1 && (
+      {banners.length > 1 && settings.showArrows && (
         <>
           <Button
             variant="ghost"
             size="icon"
-            className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 shadow-md"
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 shadow-md"
             onClick={goToPrev}
             data-testid="button-banner-prev"
           >
@@ -117,28 +142,30 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 shadow-md"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 shadow-md"
             onClick={goToNext}
             data-testid="button-banner-next"
           >
             <ChevronRight className="h-6 w-6" />
           </Button>
-
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            {banners.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentIndex(index)}
-                className={`w-3 h-3 rounded-full transition-colors ${
-                  index === currentIndex 
-                    ? "bg-primary" 
-                    : "bg-background/60 hover:bg-background/80"
-                }`}
-                data-testid={`button-banner-dot-${index}`}
-              />
-            ))}
-          </div>
         </>
+      )}
+
+      {banners.length > 1 && settings.showDots && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          {banners.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentIndex(index)}
+              className={`w-3 h-3 rounded-full transition-colors ${
+                index === currentIndex 
+                  ? "bg-primary" 
+                  : "bg-background/60"
+              }`}
+              data-testid={`button-banner-dot-${index}`}
+            />
+          ))}
+        </div>
       )}
     </section>
   );
@@ -157,6 +184,7 @@ export default function HomePage() {
   const featuredProducts = products?.slice(0, 8) || [];
   const activeCategories = categories?.filter(c => c.isActive) || [];
   const banners = (settings?.homeBanners as Banner[]) || [];
+  const carouselSettings = { ...defaultCarouselSettings, ...(settings?.carouselSettings as CarouselSettings) };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -164,7 +192,7 @@ export default function HomePage() {
       
       <main className="flex-1">
         {banners.length > 0 ? (
-          <BannerCarousel banners={banners} />
+          <BannerCarousel banners={banners} settings={carouselSettings} />
         ) : (
           <section className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-background to-accent/10">
             <div className="container px-4 py-16 md:py-24">
