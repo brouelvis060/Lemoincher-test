@@ -165,6 +165,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/products/active", async (req, res) => {
+    try {
+      const products = await storage.getProducts(true);
+      res.json(products);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.get("/api/products/:id", async (req, res) => {
     try {
       const product = await storage.getProduct(req.params.id);
