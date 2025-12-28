@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { ProductWithCategory } from "@shared/schema";
 import { useCart } from "@/lib/cart";
-import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProductCardProps {
@@ -14,7 +13,6 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
-  const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -26,15 +24,6 @@ export function ProductCard({ product }: ProductCardProps) {
     
     if (isVariable) {
       navigate(`/product/${product.id}`);
-      return;
-    }
-    
-    if (!user) {
-      toast({
-        title: "Connexion requise",
-        description: "Veuillez vous connecter pour ajouter au panier",
-        variant: "destructive",
-      });
       return;
     }
 

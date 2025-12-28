@@ -1,11 +1,18 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import type { Product, CartItemWithProduct } from "@shared/schema";
 import { useAuth } from "./auth";
+
+interface GuestCartItem {
+  productId: string;
+  quantity: number;
+  variationId?: string;
+  product: Product;
+}
 
 interface CartContextType {
   items: CartItemWithProduct[];
   isLoading: boolean;
-  addToCart: (product: Product, quantity?: number, variationId?: number) => Promise<void>;
+  addToCart: (product: Product, quantity?: number, variationId?: string) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -17,14 +24,43 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const GUEST_CART_KEY = "lemoincher_guest_cart";
+
+function getGuestCart(): GuestCartItem[] {
+  try {
+    const stored = localStorage.getItem(GUEST_CART_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestCart(items: GuestCartItem[]) {
+  localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+}
+
+function clearGuestCart() {
+  localStorage.removeItem(GUEST_CART_KEY);
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItemWithProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const prevUserIdRef = useRef<string | null>(null);
 
   const fetchCart = async () => {
     if (!user) {
-      setItems([]);
+      const guestItems = getGuestCart();
+      const cartItems: CartItemWithProduct[] = guestItems.map((item, index) => ({
+        id: `guest-${index}`,
+        userId: "guest",
+        productId: item.productId,
+        quantity: item.quantity,
+        variationId: item.variationId,
+        product: item.product,
+      }));
+      setItems(cartItems);
       return;
     }
     
@@ -42,12 +78,59 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const transferGuestCartToServer = async () => {
+    if (!user) return;
+    
+    const guestItems = getGuestCart();
+    if (guestItems.length === 0) return;
+    
+    for (const item of guestItems) {
+      try {
+        await fetch("/api/cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            variationId: item.variationId,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to transfer guest cart item:", error);
+      }
+    }
+    
+    clearGuestCart();
+    await fetchCart();
+  };
+
   useEffect(() => {
-    fetchCart();
+    if (user && !prevUserIdRef.current) {
+      transferGuestCartToServer();
+    } else {
+      fetchCart();
+    }
+    prevUserIdRef.current = user?.id || null;
   }, [user?.id]);
 
-  const addToCart = async (product: Product, quantity = 1, variationId?: number) => {
-    if (!user) return;
+  const addToCart = async (product: Product, quantity = 1, variationId?: string) => {
+    if (!user) {
+      const guestItems = getGuestCart();
+      const existingIndex = guestItems.findIndex(
+        (item) => item.productId === product.id && item.variationId === variationId
+      );
+      
+      if (existingIndex >= 0) {
+        guestItems[existingIndex].quantity += quantity;
+      } else {
+        guestItems.push({ productId: product.id, quantity, variationId, product });
+      }
+      
+      saveGuestCart(guestItems);
+      await fetchCart();
+      return;
+    }
     
     try {
       const response = await fetch("/api/cart", {
@@ -72,6 +155,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const updateQuantity = async (itemId: string, quantity: number) => {
     if (quantity < 1) return;
     
+    if (!user && itemId.startsWith("guest-")) {
+      const guestItems = getGuestCart();
+      const index = parseInt(itemId.replace("guest-", ""));
+      if (guestItems[index]) {
+        guestItems[index].quantity = quantity;
+        saveGuestCart(guestItems);
+        await fetchCart();
+      }
+      return;
+    }
+    
     try {
       const response = await fetch(`/api/cart/${itemId}`, {
         method: "PATCH",
@@ -88,6 +182,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const removeFromCart = async (itemId: string) => {
+    if (!user && itemId.startsWith("guest-")) {
+      const guestItems = getGuestCart();
+      const index = parseInt(itemId.replace("guest-", ""));
+      guestItems.splice(index, 1);
+      saveGuestCart(guestItems);
+      await fetchCart();
+      return;
+    }
+    
     try {
       const response = await fetch(`/api/cart/${itemId}`, {
         method: "DELETE",
@@ -102,7 +205,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const clearCart = async () => {
-    if (!user) return;
+    if (!user) {
+      clearGuestCart();
+      setItems([]);
+      return;
+    }
     
     try {
       const response = await fetch(`/api/cart/clear/${user.id}`, {

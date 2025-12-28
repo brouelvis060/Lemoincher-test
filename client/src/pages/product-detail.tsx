@@ -13,7 +13,6 @@ import { ClientHeader } from "@/components/client/header";
 import { ClientFooter } from "@/components/client/footer";
 import { ProductCard } from "@/components/client/product-card";
 import { useCart } from "@/lib/cart";
-import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import type { ProductWithCategory, ProductVariation } from "@shared/schema";
 
@@ -25,7 +24,6 @@ export default function ProductDetailPage() {
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | null>(null);
   const { addToCart } = useCart();
-  const { user } = useAuth();
   const { toast } = useToast();
 
   const { data: product, isLoading } = useQuery<ProductWithCategory>({
@@ -108,15 +106,6 @@ export default function ProductDetailPage() {
   };
 
   const handleAddToCart = async () => {
-    if (!user) {
-      toast({
-        title: "Connexion requise",
-        description: "Veuillez vous connecter pour ajouter au panier",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (!product) return;
 
     if (isVariable && !selectedVariation) {
