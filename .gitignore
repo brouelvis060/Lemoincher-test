@@ -4,3 +4,15 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Laravel (dossier /laravel)
+laravel/.env
+laravel/vendor
+laravel/node_modules
+laravel/public/build
+laravel/storage/*.key
+laravel/storage/logs
+laravel/storage/framework/cache
+laravel/storage/framework/sessions
+laravel/storage/framework/testing
+laravel/storage/framework/views
